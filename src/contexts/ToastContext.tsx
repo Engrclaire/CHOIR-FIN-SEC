@@ -1,19 +1,12 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Toast from '../components/Toast';
-
-type ToastType = 'success' | 'error' | 'info';
+import { ToastContext, type ToastType } from './toastContextValue';
 
 interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
 }
-
-interface ToastContextType {
-  showToast: (message: string, type: ToastType) => void;
-}
-
-const ToastContext = createContext<ToastContextType | undefined>(undefined);
 
 export const ToastProvider = ({ children }: { children: ReactNode }) => {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
@@ -45,13 +38,4 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
       </div>
     </ToastContext.Provider>
   );
-};
-
-// Custom Hook
-export const useToast = () => {
-  const context = useContext(ToastContext);
-  if (context === undefined) {
-    throw new Error('useToast must be used within a ToastProvider');
-  }
-  return context;
 };
