@@ -25,8 +25,51 @@ const debtors = [
 ];
 
 const events = [
-  { id: 1, name: 'Harvest Committee', income: 120000, expenses: 95000, profit: 25000, status: 'profit' },
-  { id: 2, name: 'Christmas Carol', income: 85000, expenses: 92000, profit: -7000, status: 'loss' },
+  {
+    id: 1,
+    name: '2026 Concert',
+    status: 'Active',
+    period: 'Feb 1, 2026 - Jun 30, 2026',
+    income: 250000,
+    expenses: 130000,
+    net: 120000,
+  },
+  {
+    id: 2,
+    name: 'Carol Event',
+    status: 'Pending',
+    period: 'Nov 8, 2025 - Dec 24, 2025',
+    income: 98000,
+    expenses: 76000,
+    net: 22000,
+  },
+  {
+    id: 3,
+    name: 'Harvest Festival',
+    status: 'Pending',
+    period: 'Nov 1, 2025 - Dec 18, 2025',
+    income: 70000,
+    expenses: 82000,
+    net: -12000,
+  },
+  {
+    id: 4,
+    name: 'Evening of Hymns',
+    status: 'Reconciled',
+    period: 'Mar 1, 2025 - Aug 21, 2025',
+    income: 190000,
+    expenses: 160000,
+    net: 30000,
+  },
+  {
+    id: 5,
+    name: '2024 Concert',
+    status: 'Reconciled',
+    period: 'Feb 1, 2024 - Jul 20, 2024',
+    income: 260000,
+    expenses: 210000,
+    net: 50000,
+  },
 ];
 
 const levies = [
@@ -99,6 +142,9 @@ const members = [
     debtStatus: 'critical',
     outstandingDebt: 15000,
     penalties: 2500,
+    totalPaid: 120000,
+    totalLevies: 80000,
+    contributions: 25000,
   },
   {
     id: 2,
@@ -110,6 +156,9 @@ const members = [
     debtStatus: 'owing',
     outstandingDebt: 12500,
     penalties: 1000,
+    totalPaid: 74000,
+    totalLevies: 36000,
+    contributions: 18000,
   },
   {
     id: 3,
@@ -121,17 +170,56 @@ const members = [
     debtStatus: 'owing',
     outstandingDebt: 8000,
     penalties: 0,
+    totalPaid: 69000,
+    totalLevies: 29000,
+    contributions: 15000,
   },
   {
     id: 4,
-    firstName: 'Grace',
+    firstName: 'Chioma',
     lastName: 'Nwosu',
     phone: '+234 804 567 8901',
-    email: 'grace@example.com',
+    email: 'chioma@example.com',
     role: 'Alto',
     debtStatus: 'clear',
     outstandingDebt: 0,
     penalties: 0,
+    totalPaid: 98000,
+    totalLevies: 54000,
+    contributions: 22000,
+  },
+  {
+    id: 5,
+    firstName: 'Peter',
+    lastName: 'Adeyemi',
+    phone: '+234 805 678 9012',
+    email: 'peter.adeyemi@example.com',
+    role: 'Baritone',
+    debtStatus: 'clear',
+    outstandingDebt: 0,
+    penalties: 0,
+    totalPaid: 104500,
+    totalLevies: 50000,
+    contributions: 14500,
+  },
+];
+
+const users = [
+  {
+    id: 1,
+    name: 'Rev. Fr. Peter Okoro',
+    email: 'peter.okoro@stcecilia.org',
+    role: 'Admin',
+    status: 'Active',
+    added: '1/15/2026',
+  },
+  {
+    id: 2,
+    name: 'Anamba Florence',
+    email: 'florence@example.com',
+    role: 'Financial Secretary',
+    status: 'Active',
+    added: '9/12/2025',
   },
 ];
 
@@ -163,7 +251,14 @@ function PrimaryButton({ children, ...props }) {
   );
 }
 
-function Header({ title, subtitle, action, actionOnClick }) {
+function Header({ title, subtitle, action, actionOnClick, actionLink }) {
+  const ButtonContent = (
+    <>
+      <Plus className="mr-2 h-4 w-4" />
+      {action}
+    </>
+  );
+
   return (
     <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
@@ -171,10 +266,15 @@ function Header({ title, subtitle, action, actionOnClick }) {
         <p className="mt-1 text-gray-600">{subtitle}</p>
       </div>
       {action && (
-        <PrimaryButton type="button" onClick={actionOnClick}>
-          <Plus className="mr-2 h-4 w-4" />
-          {action}
-        </PrimaryButton>
+        actionLink ? (
+          <Link to={actionLink} className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
+            {ButtonContent}
+          </Link>
+        ) : (
+          <PrimaryButton type="button" onClick={actionOnClick}>
+            {ButtonContent}
+          </PrimaryButton>
+        )
       )}
     </div>
   );
@@ -248,6 +348,8 @@ function StatusBadge({ status }) {
     Profit: 'bg-green-100 text-green-700',
     Loss: 'bg-red-100 text-red-700',
     Active: 'bg-green-100 text-green-700',
+    Pending: 'bg-amber-100 text-amber-700',
+    Reconciled: 'bg-slate-100 text-slate-700',
   };
 
   return (
@@ -385,9 +487,15 @@ function Detail({ label, value, className = 'text-gray-900' }) {
 export function DashboardHome() {
   return (
     <div className="p-8">
-      <Header title="Dashboard" subtitle="St Cecilia Choir Financial Overview" action="Record Transaction" />
+      <Header
+        title="Dashboard"
+        subtitle="St Cecilia Choir Financial Overview"
+        action="Record Transaction"
+        actionLink="/dashboard/transactions?action=record"
+      />
 
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard title="Head Count" amount={0} icon={Users} color="bg-slate-600" />
         <StatCard title="Bank Balance" amount={bankBalance} icon={Banknote} color="bg-blue-600" />
         <StatCard title="Cash Balance" amount={cashBalance} icon={Wallet} color="bg-green-600" />
         <StatCard title="Total Income" amount={totalIncome} icon={ArrowUpRight} color="bg-emerald-600" />
@@ -452,15 +560,15 @@ export function DashboardHome() {
               <div key={event.id} className="cursor-pointer px-6 py-4 transition-colors hover:bg-gray-50">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="font-medium text-gray-900">{event.name}</p>
-                  <StatusBadge status={event.status === 'profit' ? 'Profit' : 'Loss'} />
+                  <StatusBadge status={event.status} />
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-sm">
                   <Detail label="Income" value={formatCurrency(event.income)} className="text-green-600" />
                   <Detail label="Expenses" value={formatCurrency(event.expenses)} className="text-red-600" />
                   <Detail
                     label="Net"
-                    value={`${event.profit > 0 ? '+' : ''}${formatCurrency(event.profit)}`}
-                    className={event.profit > 0 ? 'text-green-600' : 'text-red-600'}
+                    value={`${event.net >= 0 ? '+' : ''}${formatCurrency(event.net)}`}
+                    className={event.net >= 0 ? 'text-green-600' : 'text-red-600'}
                   />
                 </div>
               </div>
@@ -478,33 +586,48 @@ export function DashboardHome() {
         <div className="border-b border-gray-200 px-6 py-4">
           <h2 className="font-semibold text-gray-900">Recent Activity</h2>
         </div>
-        <div className="divide-y divide-gray-200">
-          {transactions.slice(0, 5).map((transaction) => {
-            const amount = transaction.type === 'income' ? transaction.amountPaid || 0 : -(transaction.amount || 0);
+        {transactions.length > 0 ? (
+          <div className="divide-y divide-gray-200">
+            {transactions.slice(0, 5).map((transaction) => {
+              const amount = transaction.type === 'income' ? transaction.amountPaid || 0 : -(transaction.amount || 0);
 
-            return (
-              <div key={transaction.id} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-4">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${amount > 0 ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {amount > 0 ? (
-                      <ArrowUpRight className="h-5 w-5 text-green-600" />
-                    ) : (
-                      <ArrowDownRight className="h-5 w-5 text-red-600" />
-                    )}
+              return (
+                <div key={transaction.id} className="flex items-center justify-between px-6 py-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${amount > 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                      {amount > 0 ? (
+                        <ArrowUpRight className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <ArrowDownRight className="h-5 w-5 text-red-600" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{transaction.description}</p>
+                      <p className="text-sm text-gray-500">{transaction.date}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{transaction.description}</p>
-                    <p className="text-sm text-gray-500">{transaction.date}</p>
-                  </div>
+                  <p className={`font-semibold ${amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {amount > 0 ? '+' : ''}
+                    {formatCurrency(Math.abs(amount))}
+                  </p>
                 </div>
-                <p className={`font-semibold ${amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {amount > 0 ? '+' : ''}
-                  {formatCurrency(Math.abs(amount))}
-                </p>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="p-10 text-center">
+            <p className="text-lg font-semibold text-gray-900">No transactions yet</p>
+            <p className="mt-2 text-sm text-gray-500">Record your first transaction to start tracking income and expenses.</p>
+            <div className="mt-6">
+              <Link
+                to="/dashboard/transactions"
+                className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
+              >
+                Record First Transaction
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -522,7 +645,12 @@ export function TransactionsPage() {
 
   return (
     <div className="p-8">
-      <Header title="Transactions" subtitle="All financial activity in one place" action="Record Transaction" />
+      <Header
+        title="Transactions"
+        subtitle="All financial activity in one place"
+        action="Record Transaction"
+        actionLink="/dashboard/transactions?action=record"
+      />
       {showRecordForm && (
         <RecordTransactionPanel
           onClose={() => {
@@ -563,7 +691,12 @@ export function TransactionsPage() {
 export function IncomePage() {
   return (
     <div className="p-8">
-      <Header title="Income" subtitle="All income transactions" action="Record Income" />
+      <Header
+        title="Income"
+        subtitle="All income transactions"
+        action="Record Income"
+        actionLink="/dashboard/transactions?action=record"
+      />
       <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -584,7 +717,12 @@ export function IncomePage() {
 export function ExpensesPage() {
   return (
     <div className="p-8">
-      <Header title="Expenses" subtitle="All expense transactions" action="Record Expense" />
+      <Header
+        title="Expenses"
+        subtitle="All expense transactions"
+        action="Record Expense"
+        actionLink="/dashboard/transactions?action=record"
+      />
       <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex items-center justify-between">
           <div>
@@ -608,7 +746,12 @@ export function LeviesPage() {
 
   return (
     <div className="p-8">
-      <Header title="Levies" subtitle="Manage member levies and collections" action="Record Levy Payment" />
+      <Header
+        title="Levies"
+        subtitle="Manage member levies and collections"
+        action="Record Levy Payment"
+        actionLink="/dashboard/transactions?action=record"
+      />
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard title="Total Collected" amount={totalCollected} icon={FileText} color="bg-green-600" />
         <StatCard title="Total Expected" amount={totalExpected} icon={FileText} color="bg-blue-600" />
@@ -665,7 +808,12 @@ export function ContributionsPage() {
 
   return (
     <div className="p-8">
-      <Header title="Contributions" subtitle="Voluntary contributions from members" action="Record Contribution" />
+      <Header
+        title="Contributions"
+        subtitle="Voluntary contributions from members"
+        action="Record Contribution"
+        actionLink="/dashboard/transactions?action=record"
+      />
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard title="Total Contributions" amount={total} icon={HandCoins} color="bg-blue-600" />
         <StatCard title="Event Contributions" amount={eventTotal} icon={HandCoins} color="bg-purple-600" />
@@ -706,7 +854,16 @@ export function ContributionsPage() {
 }
 
 export function MembersPage() {
+  const [filter, setFilter] = useState('all');
+  const [search, setSearch] = useState('');
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+
+  const filteredMembers = members.filter((member) => {
+    const matchesFilter = filter === 'all' || member.debtStatus === filter;
+    const query = `${member.firstName} ${member.lastName} ${member.phone} ${member.email}`.toLowerCase();
+    return matchesFilter && query.includes(search.toLowerCase());
+  });
+
   const stats = {
     total: members.length,
     clear: members.filter((member) => member.debtStatus === 'clear').length,
@@ -719,7 +876,7 @@ export function MembersPage() {
     <div className="p-8">
       <Header
         title="Members"
-        subtitle={`${stats.total} total members`}
+        subtitle="Every choir member and their financial position"
         action="Add Member"
         actionOnClick={() => setShowAddMemberModal(true)}
       />
@@ -783,54 +940,86 @@ export function MembersPage() {
         </div>
       </Modal>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MemberStat label="Clear Status" value={stats.clear.toString()} helper="No outstanding debts" icon={CheckCircle2} />
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <MemberStat label="Total Members" value={stats.total.toString()} helper="Choir headcount" icon={Users} />
+        <MemberStat label="Clear" value={stats.clear.toString()} helper="No outstanding debts" icon={CheckCircle2} />
         <MemberStat label="Owing" value={stats.owing.toString()} helper="Have some debts" icon={AlertCircle} color="text-amber-600" />
         <MemberStat label="Critical" value={stats.critical.toString()} helper="High debt levels" icon={AlertCircle} color="text-red-600" />
-        <MemberStat label="Total Debt" value={formatCurrency(stats.totalDebt)} helper="Outstanding + Penalties" icon={AlertCircle} danger />
       </div>
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex flex-col gap-4 md:flex-row">
-          <div className="relative flex-1">
+
+      <div className="mb-6 rounded-3xl border border-gray-200 bg-white p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input className="w-full rounded-md border border-gray-200 py-2 pl-10 pr-3 text-sm outline-none" placeholder="Search by name, phone, or email..." />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="Search members..."
+            />
           </div>
-          <div className="grid grid-cols-4 rounded-md bg-gray-100 p-1 text-xs">
-            {['All', 'Clear', 'Owing', 'Critical'].map((item, index) => (
-              <button key={item} className={`rounded px-3 py-2 ${index === 0 ? 'bg-white shadow-sm' : 'text-gray-600'}`}>
-                {item}
+          <div className="grid w-full grid-cols-4 gap-2 sm:w-auto sm:grid-cols-4">
+            {[
+              { key: 'all', label: `All (${stats.total})` },
+              { key: 'clear', label: `Clear (${stats.clear})` },
+              { key: 'owing', label: `Owing (${stats.owing})` },
+              { key: 'critical', label: `Critical (${stats.critical})` },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setFilter(item.key)}
+                className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${filter === item.key ? 'border-black bg-black text-white' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}`}
+              >
+                {item.label}
               </button>
             ))}
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {members.map((member) => (
-          <Link key={member.id} to={`/dashboard/members/${member.id}`} className="rounded-lg border border-gray-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm">
-            <div className="mb-4 flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
-                  <Users className="h-5 w-5 text-gray-600" />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {filteredMembers.map((member) => (
+          <Link
+            key={member.id}
+            to={`/dashboard/members/${member.id}`}
+            className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700 text-xl font-semibold">
+                  {member.firstName[0]}{member.lastName[0]}
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">{member.firstName} {member.lastName}</h3>
-                  <p className="text-sm text-gray-500">{member.role}</p>
+                  <h3 className="text-lg font-semibold text-gray-900">{member.firstName} {member.lastName}</h3>
+                  <p className="mt-1 text-sm text-gray-500">{member.role}</p>
                 </div>
               </div>
               <StatusBadge status={member.debtStatus} />
             </div>
-            <div className="space-y-2 text-sm">
-              <p className="text-gray-600">{member.phone}</p>
-              <p className="text-gray-600">{member.email}</p>
-              <div className="border-t border-gray-200 pt-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Outstanding</span>
-                  <span className="font-semibold text-red-600">{formatCurrency(member.outstandingDebt + member.penalties)}</span>
-                </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 text-sm">
+              <Detail label="Paid" value={formatCurrency(member.totalPaid)} />
+              <Detail label="Debt" value={formatCurrency(member.outstandingDebt)} className="text-red-600" />
+              <Detail label="Penalty" value={formatCurrency(member.penalties)} />
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 text-sm">
+              <div className="rounded-3xl bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Levies paid</p>
+                <p className="mt-2 font-semibold text-gray-900">{formatCurrency(member.totalLevies)}</p>
+              </div>
+              <div className="rounded-3xl bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-500">Contributions</p>
+                <p className="mt-2 font-semibold text-gray-900">{formatCurrency(member.contributions)}</p>
               </div>
             </div>
           </Link>
         ))}
+
+        {filteredMembers.length === 0 && (
+          <div className="col-span-full rounded-3xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500">
+            No members match your search and filter selection.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -919,65 +1108,63 @@ export function EventsPage() {
   const [showAddEventModal, setShowAddEventModal] = useState(false);
 
   const filteredEvents = events.filter((event) => {
-    const matchesFilter =
-      filter === 'all' ||
-      (filter === 'profit' && event.profit >= 0) ||
-      (filter === 'loss' && event.profit < 0);
+    const matchesFilter = filter === 'all' || event.status === filter;
     const matchesSearch = event.name.toLowerCase().includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
-  const totalEvents = filteredEvents.length;
+  const totalEvents = events.length;
   const totalIncome = filteredEvents.reduce((sum, event) => sum + event.income, 0);
-  const totalProfit = filteredEvents.reduce((sum, event) => sum + event.profit, 0);
+  const totalNet = filteredEvents.reduce((sum, event) => sum + event.net, 0);
 
   return (
     <div className="p-8">
       <Header
         title="Events"
-        subtitle="Track event income, expenses, and outcomes"
-        action="Add Event"
+        subtitle="Manage event budgets and results"
+        action="Create Event"
         actionOnClick={() => setShowAddEventModal(true)}
       />
 
-      <Modal open={showAddEventModal} title="Add Event" onClose={() => setShowAddEventModal(false)}>
+      <Modal open={showAddEventModal} title="Create Event" onClose={() => setShowAddEventModal(false)}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Event name">
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="Harvest Committee"
+              placeholder="2026 Concert"
             />
           </Field>
           <Field label="Status">
             <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
-              <option>Profit</option>
-              <option>Loss</option>
+              <option>Active</option>
+              <option>Pending</option>
+              <option>Reconciled</option>
             </select>
           </Field>
           <Field label="Income">
             <input
               type="number"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="120000"
+              placeholder="250000"
             />
           </Field>
           <Field label="Expenses">
             <input
               type="number"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="95000"
+              placeholder="130000"
             />
           </Field>
-          <Field label="Date">
+          <Field label="Start date">
             <input
               type="date"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </Field>
-          <Field label="Description">
+          <Field label="End date">
             <input
+              type="date"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="Event details"
             />
           </Field>
         </div>
@@ -994,7 +1181,7 @@ export function EventsPage() {
             onClick={() => setShowAddEventModal(false)}
             className="inline-flex items-center justify-center rounded-xl bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-900"
           >
-            Add Event
+            Create Event
           </button>
         </div>
       </Modal>
@@ -1003,17 +1190,17 @@ export function EventsPage() {
         <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-500">Events</p>
           <p className="mt-3 text-3xl font-semibold text-gray-900">{totalEvents}</p>
-          <p className="mt-2 text-sm text-gray-500">Events matching your current view</p>
+          <p className="mt-2 text-sm text-gray-500">All scheduled events</p>
         </div>
         <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-500">Total Income</p>
           <p className="mt-3 text-3xl font-semibold text-gray-900">{formatCurrency(totalIncome)}</p>
-          <p className="mt-2 text-sm text-gray-500">Income from visible events</p>
+          <p className="mt-2 text-sm text-gray-500">Income from filtered events</p>
         </div>
         <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
           <p className="text-sm text-gray-500">Net Result</p>
-          <p className="mt-3 text-3xl font-semibold text-gray-900">{formatCurrency(totalProfit)}</p>
-          <p className="mt-2 text-sm text-gray-500">Combined profit/loss for visible events</p>
+          <p className="mt-3 text-3xl font-semibold text-gray-900">{formatCurrency(totalNet)}</p>
+          <p className="mt-2 text-sm text-gray-500">Combined profit/loss</p>
         </div>
       </div>
 
@@ -1030,49 +1217,57 @@ export function EventsPage() {
           </div>
         </div>
         <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {['all', 'profit', 'loss'].map((value) => (
+          {['all', 'Active', 'Pending', 'Reconciled'].map((value) => (
             <button
               key={value}
               type="button"
-              onClick={() => setFilter(value)}
-              className={`px-4 py-3 text-sm font-medium transition ${filter === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              onClick={() => setFilter(value === 'all' ? 'all' : value)}
+              className={`px-4 py-3 text-sm font-medium transition ${filter === (value === 'all' ? 'all' : value) ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
             >
-              {value === 'all' ? 'All' : value === 'profit' ? 'Profit' : 'Loss'}
+              {value}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {filteredEvents.map((event) => (
-          <Link
-            key={event.id}
-            to={`/dashboard/events/${event.id}`}
-            className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200"
-          >
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-semibold text-gray-900">{event.name}</h3>
-                <p className="mt-1 text-sm text-gray-500">Click to view event details</p>
-              </div>
-              <StatusBadge status={event.status === 'profit' ? 'Profit' : 'Loss'} />
-            </div>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Detail label="Income" value={formatCurrency(event.income)} className="text-green-600" />
-              <Detail label="Expenses" value={formatCurrency(event.expenses)} className="text-red-600" />
-              <Detail
-                label="Net"
-                value={`${event.profit > 0 ? '+' : ''}${formatCurrency(event.profit)}`}
-                className={event.profit > 0 ? 'text-green-600' : 'text-red-600'}
-              />
-            </div>
-          </Link>
-        ))}
-        {filteredEvents.length === 0 && (
-          <div className="col-span-full rounded-3xl border border-gray-200 bg-white p-10 text-center text-sm text-gray-500 shadow-sm">
-            No events found. Try adjusting your search or filter.
-          </div>
-        )}
+      <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px]">
+            <thead className="border-b border-gray-200 bg-gray-50">
+              <tr>
+                {['Event', 'Status', 'Period', 'Net', 'Actions'].map((heading) => (
+                  <th key={heading} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredEvents.map((event) => (
+                <tr key={event.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{event.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600"><StatusBadge status={event.status} /></td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{event.period}</td>
+                  <td className={`px-6 py-4 text-sm font-semibold ${event.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {event.net >= 0 ? '+' : ''}{formatCurrency(event.net)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <Link to={`/dashboard/events/${event.id}`} className="text-blue-600 hover:text-blue-700">
+                      View
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {filteredEvents.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
+                    No events match your search or filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -1153,7 +1348,12 @@ export function ReportsPage({ type = 'overview' }) {
 
   return (
     <div className="p-8">
-      <Header title={heading} subtitle="View insights and reports" action="Go to Transactions" />
+      <Header
+        title={heading}
+        subtitle="View insights and reports"
+        action="Go to Transactions"
+        actionLink="/dashboard/transactions"
+      />
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
         <StatCard title="Total Income" amount={totalIncome} icon={ArrowUpRight} color="bg-green-600" />
         <StatCard title="Total Expenses" amount={totalExpenses} icon={ArrowDownRight} color="bg-red-600" />
@@ -1227,7 +1427,12 @@ export function SettingsPage() {
 
   return (
     <div className="p-8">
-      <Header title="Settings" subtitle="Configure organization, permissions and financial controls" action="Save Settings" />
+      <Header
+        title="Settings"
+        subtitle="Configure organization, permissions and financial controls"
+        action="Save Settings"
+        actionOnClick={() => window.alert('Settings saved successfully')}
+      />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(320px,360px)_1fr]">
         <div className="space-y-6">
@@ -1342,19 +1547,22 @@ export function SettingsPage() {
 }
 
 export function UserManagementPage() {
-  const users = [
-    { name: 'Admin User', email: 'admin@stcecilia.org', role: 'Choir Admin', status: 'Active' },
-    { name: 'Finance Secretary', email: 'finance@stcecilia.org', role: 'Financial Secretary', status: 'Active' },
-    { name: 'Reviewer', email: 'reviewer@stcecilia.org', role: 'Read-only', status: 'Invited' },
-  ];
   const [search, setSearch] = useState('');
   const [showInviteUserModal, setShowInviteUserModal] = useState(false);
-  const filteredUsers = users.filter(
-    (user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase()) ||
-      user.role.toLowerCase().includes(search.toLowerCase()),
-  );
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const roleCards = [
+    { title: 'Admin', description: 'Full system access and user management' },
+    { title: 'Financial Secretary', description: 'Record transactions, view reports' },
+    { title: 'Treasurer', description: 'View financial reports and balances' },
+    { title: 'Committee Head', description: 'Manage committee events and finances' },
+  ];
+
+  const filteredUsers = users.filter((user) => {
+    const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+    const query = `${user.name} ${user.email} ${user.role}`.toLowerCase();
+    return matchesStatus && query.includes(search.toLowerCase());
+  });
 
   const stats = {
     total: users.length,
@@ -1365,7 +1573,7 @@ export function UserManagementPage() {
   return (
     <div className="p-8">
       <Header
-        title="Users"
+        title="User Management"
         subtitle="Invite and manage team access"
         action="Invite User"
         actionOnClick={() => setShowInviteUserModal(true)}
@@ -1376,21 +1584,22 @@ export function UserManagementPage() {
           <Field label="Full name">
             <input
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="Jane Doe"
+              placeholder="Rev. Fr. Peter Okoro"
             />
           </Field>
           <Field label="Email">
             <input
               type="email"
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="jane.doe@example.com"
+              placeholder="peter.okoro@stcecilia.org"
             />
           </Field>
           <Field label="Role">
             <select className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100">
-              <option>Choir Admin</option>
+              <option>Admin</option>
               <option>Financial Secretary</option>
-              <option>Read-only</option>
+              <option>Treasurer</option>
+              <option>Committee Head</option>
             </select>
           </Field>
           <Field label="Status">
@@ -1418,48 +1627,50 @@ export function UserManagementPage() {
         </div>
       </Modal>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Total users</p>
-          <p className="mt-3 text-3xl font-semibold text-gray-900">{stats.total}</p>
-        </div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Active users</p>
-          <p className="mt-3 text-3xl font-semibold text-gray-900">{stats.active}</p>
-        </div>
-        <div className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-gray-500">Invited</p>
-          <p className="mt-3 text-3xl font-semibold text-gray-900">{stats.invited}</p>
-        </div>
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        {roleCards.map((card) => (
+          <div key={card.title} className="rounded-3xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+              <Users className="h-5 w-5" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">{card.title}</h3>
+            <p className="mt-2 text-sm text-gray-500">{card.description}</p>
+          </div>
+        ))}
       </div>
 
-      <div className="mb-6 rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-xs">
+      <div className="mb-6 grid gap-4 md:grid-cols-[1fr_auto]">
+        <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-2xl border border-gray-200 py-3 pl-11 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-              placeholder="Search by name, email or role"
+              className="w-full rounded-2xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="Search users..."
             />
           </div>
-          <div className="inline-flex rounded-2xl border border-gray-200 bg-gray-100 p-1 text-xs text-gray-600">
-            {['All', 'Active', 'Invited'].map((item) => (
-              <button key={item} type="button" className="rounded-2xl px-3 py-2 transition hover:bg-white">
-                {item}
-              </button>
-            ))}
-          </div>
+        </div>
+        <div className="inline-flex overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {['all', 'Active', 'Invited'].map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value)}
+              className={`px-4 py-3 text-sm font-medium transition ${statusFilter === value ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              {value === 'all' ? 'All' : value}
+            </button>
+          ))}
         </div>
       </div>
 
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-160">
+          <table className="w-full min-w-[760px]">
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
-                {['Name', 'Email', 'Role', 'Status', 'Actions'].map((heading) => (
+                {['User', 'Role', 'Status', 'Added', 'Actions'].map((heading) => (
                   <th key={heading} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
                     {heading}
                   </th>
@@ -1469,14 +1680,30 @@ export function UserManagementPage() {
             <tbody className="divide-y divide-gray-200">
               {filteredUsers.map((user) => (
                 <tr key={user.email} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-700">
+                        {user.name
+                          .split(' ')
+                          .slice(0, 2)
+                          .map((part) => part[0])
+                          .join('')}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                        <p className="text-sm text-gray-500">{user.email}</p>
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-6 py-4 text-sm text-gray-900">{user.role}</td>
                   <td className="px-6 py-4">
                     <StatusBadge status={user.status} />
                   </td>
-                  <td className="px-6 py-4 text-sm text-blue-600 hover:text-blue-700">
-                    <button type="button">Manage</button>
+                  <td className="px-6 py-4 text-sm text-gray-600">{user.added}</td>
+                  <td className="px-6 py-4">
+                    <button type="button" className="text-blue-600 hover:text-blue-700">
+                      View
+                    </button>
                   </td>
                 </tr>
               ))}
