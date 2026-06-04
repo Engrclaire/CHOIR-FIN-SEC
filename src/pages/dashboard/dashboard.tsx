@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ElementType, ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowDownRight,
@@ -233,7 +233,7 @@ function formatCurrency(amount: number) {
 
 function PrimaryButton({ children }: { children: ReactNode }) {
   return (
-    <button className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800">
+    <button className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 cursor-pointer">
       {children}
     </button>
   );
@@ -336,7 +336,7 @@ export default function DashboardLayout() {
         <div className="border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-md border border-gray-200 p-2 text-gray-700"
+            className="inline-flex items-center justify-center rounded-md border border-gray-200 p-2 text-gray-700 cursor-pointer"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-5 w-5" />
@@ -350,6 +350,7 @@ export default function DashboardLayout() {
 
 export function DashboardHome() {
   const recentTransactions = transactions.slice(0, 5);
+  const navigate = useNavigate();
 
   return (
     <div className="p-8">
@@ -406,7 +407,10 @@ export function DashboardHome() {
             ))}
           </div>
           <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-            <button className="w-full rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+            <button
+              onClick={() => navigate('/dashboard/members')}
+              className="w-full rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 cursor-pointer"
+            >
               View All Members
             </button>
           </div>
@@ -447,7 +451,10 @@ export function DashboardHome() {
             ))}
           </div>
           <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-            <button className="w-full rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+            <button
+              onClick={() => navigate('/dashboard/events')}
+              className="w-full rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 cursor-pointer"
+            >
               View All Events
             </button>
           </div>
@@ -514,7 +521,7 @@ export function TransactionsPage() {
             {(['all', 'income', 'expenses'] as const).map((item) => (
               <button
                 key={item}
-                className={`rounded px-3 py-1.5 capitalize ${filter === item ? 'bg-white shadow-sm' : 'text-gray-600'}`}
+                className={`rounded px-3 py-1.5 capitalize cursor-pointer ${filter === item ? 'bg-white shadow-sm' : 'text-gray-600'}`}
                 onClick={() => setFilter(item)}
               >
                 {item === 'all' ? 'All Transactions' : item}
@@ -536,7 +543,7 @@ export function TransactionsPage() {
 function TransactionTable({ rows }: { rows: Transaction[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <table className="w-full min-w-[720px]">
+      <table className="w-full min-w-180">
         <thead className="border-b border-gray-200 bg-gray-50">
           <tr>
             <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date</th>
@@ -699,7 +706,7 @@ export function ContributionsPage() {
       </div>
       <SearchPanel placeholder="Search contributions..." />
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="w-full min-w-[720px]">
+        <table className="w-full min-w-180">
           <thead className="border-b border-gray-200 bg-gray-50">
             <tr>
               {['Date', 'Description', 'Contributor', 'Type', 'Amount'].map((heading) => (
@@ -755,7 +762,7 @@ export function MembersPage() {
           </div>
           <div className="grid grid-cols-4 rounded-md bg-gray-100 p-1 text-xs">
             {['All', 'Clear', 'Owing', 'Critical'].map((item, index) => (
-              <button key={item} className={`rounded px-3 py-2 ${index === 0 ? 'bg-white shadow-sm' : 'text-gray-600'}`}>
+              <button key={item} className={`rounded px-3 py-2 cursor-pointer ${index === 0 ? 'bg-white shadow-sm' : 'text-gray-600'}`}>
                 {item}
               </button>
             ))}
@@ -931,7 +938,7 @@ export function UserManagementPage() {
     <div className="p-8">
       <Header title="User Management" subtitle="Invite and manage team access" action="Invite User" />
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="w-full min-w-[640px]">
+        <table className="w-full min-w-160">
           <thead className="border-b border-gray-200 bg-gray-50">
             <tr>
               {['Name', 'Email', 'Role', 'Status'].map((heading) => (
@@ -959,7 +966,7 @@ export function UserManagementPage() {
 
 export function LoadingPage() {
   return (
-    <div className="flex min-h-[400px] items-center justify-center p-8">
+    <div className="flex min-h-100 items-center justify-center p-8">
       <div className="text-center">
         <LoaderCircle className="mx-auto mb-3 h-8 w-8 animate-spin text-gray-400" />
         <p className="text-gray-600">Loading dashboard...</p>

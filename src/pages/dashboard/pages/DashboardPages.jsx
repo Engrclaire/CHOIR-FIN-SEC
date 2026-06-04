@@ -1232,7 +1232,7 @@ export function EventsPage() {
 
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-190">
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
                 {['Event', 'Status', 'Period', 'Net', 'Actions'].map((heading) => (
@@ -1667,7 +1667,7 @@ export function UserManagementPage() {
 
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <table className="w-full min-w-190">
             <thead className="border-b border-gray-200 bg-gray-50">
               <tr>
                 {['User', 'Role', 'Status', 'Added', 'Actions'].map((heading) => (

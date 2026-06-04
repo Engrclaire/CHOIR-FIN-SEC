@@ -1,7 +1,10 @@
 // pages/dashboard/components/EventPerformance.tsx
 import { Calendar } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function EventPerformance() {
+  const navigate = useNavigate();
+
   return (
     <div className="bg-white rounded-3xl p-6 border border-gray-100">
       <div className="flex items-center justify-between mb-6">
@@ -55,7 +58,10 @@ export default function EventPerformance() {
         </div>
       </div>
 
-      <button className="w-full mt-8 py-3.5 text-sm font-medium border border-gray-200 hover:bg-gray-50 rounded-2xl transition">
+      <button
+        onClick={() => navigate('/dashboard/events')}
+        className="w-full mt-8 py-3.5 text-sm font-medium border border-gray-200 hover:bg-gray-50 rounded-2xl transition cursor-pointer"
+      >
         View All Events
       </button>
     </div>

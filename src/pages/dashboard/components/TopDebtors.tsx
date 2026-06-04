@@ -1,5 +1,6 @@
 // pages/dashboard/components/TopDebtors.tsx
 import { Users, AlertCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const debtors = [
   { name: "Joshua Okonkwo", amount: "₦15,000", status: "critical" },
@@ -8,6 +9,8 @@ const debtors = [
 ];
 
 export default function TopDebtors() {
+  const navigate = useNavigate();
+
   return (
     <div className="bg-white rounded-3xl p-6 border border-gray-100">
       <div className="flex items-center justify-between mb-6">
@@ -43,7 +46,10 @@ export default function TopDebtors() {
         ))}
       </div>
 
-      <button className="w-full mt-6 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-2xl transition">
+      <button
+        onClick={() => navigate('/dashboard/members')}
+        className="w-full mt-6 py-3 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-2xl transition cursor-pointer"
+      >
         View All Members
       </button>
     </div>

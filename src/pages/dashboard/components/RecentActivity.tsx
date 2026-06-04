@@ -19,7 +19,7 @@ export default function RecentActivity() {
         Start recording transactions to see activity here
       </p>
 
-      <button className="bg-black text-white px-6 py-3.5 rounded-2xl flex items-center gap-2 mx-auto hover:bg-gray-800 transition">
+      <button className="bg-black text-white px-6 py-3.5 rounded-2xl flex items-center gap-2 mx-auto hover:bg-gray-800 transition cursor-pointer">
         <Plus className="w-5 h-5" />
         Record First Transaction
       </button>

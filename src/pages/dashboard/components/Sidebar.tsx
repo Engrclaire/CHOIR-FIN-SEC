@@ -122,7 +122,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[200px] transform flex-col border-r border-gray-200 bg-white transition duration-300 lg:static lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-50 transform flex-col border-r border-gray-200 bg-white transition duration-300 lg:static lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
         <div className="border-b border-gray-200 p-4">
           <div className="flex items-center justify-between">
@@ -135,7 +135,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
             <button
               type="button"
-              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden"
+              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 lg:hidden cursor-pointer"
               onClick={onClose}
             >
               <X className="h-5 w-5" />
@@ -194,7 +194,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 cursor-pointer"
             onClick={() => navigate('/')}
           >
             <LogOut className="h-5 w-5" />
@@ -233,7 +233,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
                 <button
                   type="button"
-                  className="rounded-md p-2 text-gray-500 hover:bg-gray-100"
+                  className="rounded-md p-2 text-gray-500 hover:bg-gray-100 cursor-pointer"
                   onClick={() => setSubmenu(null)}
                 >
                   <X className="h-5 w-5" />
@@ -261,7 +261,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                       }`
                     }
                   >
-                    <item.icon className={`mt-0.5 h-5 w-5 flex-shrink-0 ${item.primary ? 'text-white' : ''}`} />
+                    <item.icon className={`mt-0.5 h-5 w-5 shrink-0 ${item.primary ? 'text-white' : ''}`} />
                     <div className="min-w-0 flex-1">
                       <div className={`text-sm font-medium ${item.primary ? 'text-white' : ''}`}>{item.name}</div>
                       <p className={`mt-0.5 text-xs ${item.primary ? 'text-blue-100' : 'text-gray-500 group-hover:text-gray-600'}`}>
