@@ -1,15 +1,24 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Login from './auth/Login';
 import Onboarding from './auth/onboarding/Onboarding';
 import { ToastProvider } from './contexts/ToastContext';
 
-// Placeholder pages (we'll create them soon)
-import Dashboard from './pages/dashboard/dashboard';
-// import MemberDetails from './pages/dashboard/members/MemberDetails';
-// import Members from './pages/dashboard/members/Members';
-// import Transactions from './pages/Transactions';
-// import Budgets from './pages/Budgets';
-// import Reports from './pages/Reports';
+import DashboardLayout from './pages/dashboard/dashboard';
+import {
+  ContributionsPage,
+  DashboardHome,
+  EventDetailsPage,
+  EventsPage,
+  ExpensesPage,
+  IncomePage,
+  LeviesPage,
+  MemberDetailsPage,
+  MembersPage,
+  ReportsPage,
+  SettingsPage,
+  TransactionsPage,
+  UserManagementPage,
+} from './pages/dashboard/pages/DashboardPages';
 
 function App() {
   return (
@@ -20,13 +29,24 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/onboarding" element={<Onboarding />} />
 
-        {/* Protected Routes (we'll add auth protection later) */}
-        <Route path="/dashboard" element={<Dashboard />} />
-        {/* <Route path="/dashboard/members" element={<Members />} /> */}
-        {/* <Route path="/dashboard/members/:memberId" element={<MemberDetails />} /> */}
-        {/* <Route path="/transactions" element={<Transactions />} />
-        <Route path="/budgets" element={<Budgets />} />
-        <Route path="/reports" element={<Reports />} /> */}
+        <Route path="/dashboard" element={<DashboardLayout />}>
+          <Route index element={<DashboardHome />} />
+          <Route path="transactions" element={<TransactionsPage />} />
+          <Route path="income" element={<IncomePage />} />
+          <Route path="expenses" element={<ExpensesPage />} />
+          <Route path="levies" element={<LeviesPage />} />
+          <Route path="contributions" element={<ContributionsPage />} />
+          <Route path="members" element={<MembersPage />} />
+          <Route path="members/:id" element={<MemberDetailsPage />} />
+          <Route path="events" element={<EventsPage />} />
+          <Route path="events/:id" element={<EventDetailsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="reports/financial-summary" element={<ReportsPage type="financial" />} />
+          <Route path="reports/member-activity" element={<ReportsPage type="members" />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="user-management" element={<UserManagementPage />} />
+        </Route>
+        <Route path="/app/*" element={<Navigate to="/dashboard" replace />} />
 
         {/* Fallback route */}
         <Route path="*" element={
