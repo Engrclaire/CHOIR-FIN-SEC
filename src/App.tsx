@@ -4,21 +4,19 @@ import Onboarding from './auth/onboarding/Onboarding';
 import { ToastProvider } from './contexts/ToastContext';
 
 import DashboardLayout from './pages/dashboard/dashboard';
-import {
-  ContributionsPage,
-  DashboardHome,
-  EventDetailsPage,
-  EventsPage,
-  ExpensesPage,
-  IncomePage,
-  LeviesPage,
-  MemberDetailsPage,
-  MembersPage,
-  ReportsPage,
-  SettingsPage,
-  TransactionsPage,
-  UserManagementPage,
-} from './pages/dashboard/pages/DashboardPages';
+import { DashboardHome } from './pages/dashboard/pages/DashboardHome';
+import { TransactionsPage } from './pages/dashboard/pages/TransactionsPage';
+import { IncomePage } from './pages/dashboard/pages/IncomePage';
+import { ExpensesPage } from './pages/dashboard/pages/ExpensesPage';
+import { LeviesPage } from './pages/dashboard/pages/LeviesPage';
+import { ContributionsPage } from './pages/dashboard/pages/ContributionsPage';
+import { MembersPage } from './pages/dashboard/pages/MembersPage';
+import { MemberDetailsPage } from './pages/dashboard/pages/MemberDetailsPage';
+import { EventsPage } from './pages/dashboard/pages/EventsPage';
+import { EventDetailsPage } from './pages/dashboard/pages/EventDetailsPage';
+import { ReportsPage } from './pages/dashboard/pages/ReportsPage';
+import { SettingsPage } from './pages/dashboard/pages/SettingsPage';
+import { UserManagementPage } from './pages/dashboard/pages/UserManagementPage';
 
 function App() {
   return (
