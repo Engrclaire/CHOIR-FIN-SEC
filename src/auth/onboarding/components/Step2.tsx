@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, type ChangeEvent, type FC, type FormEvent } from 'react';
 import { Plus, Upload, X } from 'lucide-react';
 import Step2Modal from './Step2Modal';
 
@@ -15,10 +15,12 @@ interface Member {
 }
 
 interface Step2Props {
+  // Renamed callback to accurately mirror dynamic wizard baseline state tracking
+  onDataChange?: (data: { financial: FinancialData; members: Member[]; isValid: boolean }) => void;
   onSubmit?: (data: { financial: FinancialData; members: Member[] }) => void;
 }
 
-const Step2 = ({ onSubmit }: Step2Props) => {
+const Step2: FC<Step2Props> = ({ onDataChange, onSubmit }) => {
   const [financialData, setFinancialData] = useState<FinancialData>({
     currentBankBalance: '',
     currentCashAtHand: '',
@@ -33,22 +35,27 @@ const Step2 = ({ onSubmit }: Step2Props) => {
     choirRole: '',
   });
 
-  const handleFinancialChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    // Only store the raw number value
-    setFinancialData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
+  // Safe number formatter guarding against structural NaN values
   const formatNumberWithCommas = (value: string): string => {
     if (!value) return '';
-    const numValue = parseFloat(value);
+    const cleanValue = value.replace(/,/g, '');
+    const numValue = parseFloat(cleanValue);
+    if (isNaN(numValue)) return '';
     return numValue.toLocaleString('en-NG');
   };
 
-  const handleMemberFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  // Clean raw setter instead of synthetic browser input event mocking
+  const updateFinancialField = (fieldName: keyof FinancialData, rawValue: string) => {
+    // Strip everything except raw digits and single floating point periods
+    const numericSanitized = rawValue.replace(/[^0-9.]/g, '');
+    
+    setFinancialData(prev => ({
+      ...prev,
+      [fieldName]: numericSanitized
+    }));
+  };
+
+  const handleMemberFormChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setMemberForm(prev => ({
       ...prev,
@@ -73,7 +80,22 @@ const Step2 = ({ onSubmit }: Step2Props) => {
     setMembers(members.filter((_, i) => i !== index));
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  // Keep parent form controller cleanly synced with layout parameters
+  useEffect(() => {
+    const hasValidBalances = 
+      financialData.currentBankBalance.trim() !== '' && 
+      financialData.currentCashAtHand.trim() !== '';
+
+    if (onDataChange) {
+      onDataChange({ 
+        financial: financialData, 
+        members,
+        isValid: hasValidBalances
+      });
+    }
+  }, [financialData, members, onDataChange]);
+
+  const handleFormSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (onSubmit) {
       onSubmit({
@@ -102,12 +124,9 @@ const Step2 = ({ onSubmit }: Step2Props) => {
                 type="text"
                 name="currentBankBalance"
                 value={formatNumberWithCommas(financialData.currentBankBalance)}
-                onChange={(e) => {
-                  const numOnly = e.target.value.replace(/,/g, '');
-                  handleFinancialChange({ ...e, target: { ...e.target, value: numOnly, name: 'currentBankBalance' } } as React.ChangeEvent<HTMLInputElement>);
-                }}
+                onChange={(e) => updateFinancialField('currentBankBalance', e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-zinc-100 border border-zinc-200 rounded-xl pl-8 pr-4 py-2 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
+                className="w-full bg-zinc-100 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
               />
             </div>
           </div>
@@ -123,12 +142,9 @@ const Step2 = ({ onSubmit }: Step2Props) => {
                 type="text"
                 name="currentCashAtHand"
                 value={formatNumberWithCommas(financialData.currentCashAtHand)}
-                onChange={(e) => {
-                  const numOnly = e.target.value.replace(/,/g, '');
-                  handleFinancialChange({ ...e, target: { ...e.target, value: numOnly, name: 'currentCashAtHand' } } as React.ChangeEvent<HTMLInputElement>);
-                }}
+                onChange={(e) => updateFinancialField('currentCashAtHand', e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-zinc-100 border border-zinc-200 rounded-xl pl-8 pr-4 py-2 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
+                className="w-full bg-zinc-100 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
               />
             </div>
           </div>
@@ -141,27 +157,25 @@ const Step2 = ({ onSubmit }: Step2Props) => {
         <p className="text-sm md:text-md text-zinc-600 mb-6">Build your member directory to track contributions</p>
 
         <div className="space-y-4">
-          {/* Add Member Manually Button */}
           <button
             type="button"
             onClick={() => setShowMemberModal(true)}
-            className="w-full flex items-center justify-center gap-3 px-6 py-2 border border-zinc-300 rounded-xl font-semibold text-zinc-900 text-sm md:text-md hover:bg-zinc-50 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 px-6 py-2.5 border border-zinc-300 rounded-xl font-semibold text-zinc-900 text-sm md:text-md hover:bg-zinc-50 transition-colors cursor-pointer"
           >
             <Plus size={20} />
             Add Member Manually
           </button>
 
-          {/* Import from CSV/Excel Button */}
           <button
             type="button"
-            className="w-full flex items-center justify-center gap-3 px-6 py-2 bg-zinc-100 border border-zinc-200 rounded-xl font-semibold text-zinc-900 text-sm md:text-md hover:bg-zinc-150 transition-colors cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 px-6 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl font-semibold text-zinc-900 text-sm md:text-md hover:bg-zinc-200 transition-colors cursor-pointer"
           >
             <Upload size={20} />
             Import from CSV/Excel
           </button>
         </div>
 
-        {/* Members List */}
+        {/* Members List Display */}
         {members.length > 0 && (
           <div className="mt-6">
             <p className="text-sm font-semibold text-zinc-700 mb-3">Added Members ({members.length})</p>
@@ -186,7 +200,6 @@ const Step2 = ({ onSubmit }: Step2Props) => {
         )}
       </div>
 
-      {/* Add Member Modal Component */}
       <Step2Modal
         showMemberModal={showMemberModal}
         setShowMemberModal={setShowMemberModal}

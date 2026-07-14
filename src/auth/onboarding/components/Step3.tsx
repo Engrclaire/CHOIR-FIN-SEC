@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useEffect, useState, useRef, type ChangeEvent, type FormEvent } from 'react';
+import { Plus, X, Upload } from 'lucide-react';
 import Step3Modal from './Step3Modal';
 
 interface Levy {
@@ -34,6 +34,8 @@ const Step3 = ({ onSubmit }: Step3Props) => {
   const [showEventModal, setShowEventModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [levyForm, setLevyForm] = useState<Levy>({
     name: '',
     amount: '',
@@ -54,7 +56,7 @@ const Step3 = ({ onSubmit }: Step3Props) => {
     role: '',
   });
 
-  const handleLevyFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleLevyFormChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
       setLevyForm(prev => ({
@@ -69,7 +71,7 @@ const Step3 = ({ onSubmit }: Step3Props) => {
     }
   };
 
-  const handleEventFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleEventFormChange = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setEventForm(prev => ({
       ...prev,
@@ -77,7 +79,7 @@ const Step3 = ({ onSubmit }: Step3Props) => {
     }));
   };
 
-  const handleInviteFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInviteFormChange = (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setInviteForm(prev => ({
       ...prev,
@@ -123,6 +125,46 @@ const Step3 = ({ onSubmit }: Step3Props) => {
     }
   };
 
+  // CSV Parsing Engine for Bulk Team Member Uploads
+  const handleBulkCSVUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split(/\r?\n/);
+      const parsedMembers: TeamMember[] = [];
+
+      // Loop through lines, skipping the descriptive header row
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        // Handles standard comma separation strings
+        const columns = line.split(',');
+        const fullName = columns[0]?.trim();
+        const email = columns[1]?.trim();
+        const role = columns[2]?.trim();
+
+        if (fullName && email && role) {
+          parsedMembers.push({ fullName, email, role });
+        }
+      }
+
+      if (parsedMembers.length > 0) {
+        setTeamMembers(prev => [...prev, ...parsedMembers]);
+      }
+      
+      // Clear input so the user can upload the same file again if modified
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    reader.readAsText(file);
+  };
+
   const handleRemoveLevy = (index: number) => {
     setLevies(levies.filter((_, i) => i !== index));
   };
@@ -135,7 +177,7 @@ const Step3 = ({ onSubmit }: Step3Props) => {
     setTeamMembers(teamMembers.filter((_, i) => i !== index));
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (onSubmit) {
       onSubmit({
@@ -145,6 +187,10 @@ const Step3 = ({ onSubmit }: Step3Props) => {
       });
     }
   };
+
+  useEffect(() => {
+    if (onSubmit) onSubmit({ levies, events, teamMembers });
+  }, [levies, events, teamMembers, onSubmit]);
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-12">
@@ -229,16 +275,39 @@ const Step3 = ({ onSubmit }: Step3Props) => {
         <h2 className="text-xl md:text-2xl font-bold text-zinc-900 mb-2">Invite Team Members</h2>
         <p className="text-zinc-600 mb-6 text-sm md:text-md">Invite Financial Secretaries and Committee Leads to collaborate</p>
 
-        <button
-          type="button"
-          onClick={() => setShowInviteModal(true)}
-          className="w-full flex items-center justify-center gap-3 px-6 py-2 border border-zinc-300 rounded-xl font-semibold text-zinc-900 hover:bg-zinc-50 transition-colors cursor-pointer"
-        >
-          <Plus size={20} />
-          Invite User
-        </button>
+        {/* Action Row containing Manual Button & Bulk Upload Button */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setShowInviteModal(true)}
+            className="w-full flex items-center justify-center gap-3 px-6 py-2 border border-zinc-300 rounded-xl font-semibold text-zinc-900 hover:bg-zinc-50 transition-colors cursor-pointer"
+          >
+            <Plus size={20} />
+            Invite User manually
+          </button>
 
-        <p className="text-xs text-zinc-600 text-center mt-3">System will automatically send login credentials via email.</p>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-3 px-6 py-2 border border-dashed border-zinc-300 bg-zinc-50/50 rounded-xl font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+          >
+            <Upload size={18} className="text-zinc-500" />
+            Bulk CSV Upload
+          </button>
+          
+          {/* Hidden File Input Handling CSV Upload streams */}
+          <input 
+            type="file"
+            ref={fileInputRef}
+            onChange={handleBulkCSVUpload}
+            accept=".csv"
+            className="hidden"
+          />
+        </div>
+
+        <p className="text-xs text-zinc-500 text-center mt-3">
+          The system automatically maps user records. CSV format header should look like: <code className="bg-zinc-100 px-1 rounded text-zinc-800 font-mono">Full Name, Email, Role</code>
+        </p>
 
         {teamMembers.length > 0 && (
           <div className="mt-6">

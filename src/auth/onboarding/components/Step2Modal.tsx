@@ -30,8 +30,17 @@ const Step2Modal = ({
 }: Step2ModalProps) => {
   if (!showMemberModal) return null;
 
+  // Handles inline validation right before moving member state to your main database payload context
+  const onMemberSubmit = () => {
+    if (!memberForm.fullName.trim() || !memberForm.phoneNumber.trim() || !memberForm.choirRole) {
+      alert('Please fill out all required parameters (Name, Phone, and Voice Part role) to save to the database.');
+      return;
+    }
+    handleAddMember();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center p-2 md:p-4 z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-2 md:p-4 z-50">
       <div className="bg-white rounded-3xl shadow-2xl p-5 md:p-8 max-w-md w-full">
         <h3 className="text-xl md:text-2xl font-bold text-zinc-900 mb-6">Add Choir Member</h3>
 
@@ -45,7 +54,7 @@ const Step2Modal = ({
               type="text"
               name="fullName"
               value={memberForm.fullName}
-              onChange={handleMemberFormChange}
+              onChange={memberFormChange => handleMemberFormChange(memberFormChange)}
               placeholder="Enter full name"
               required
               className="w-full bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
@@ -61,7 +70,7 @@ const Step2Modal = ({
               type="tel"
               name="phoneNumber"
               value={memberForm.phoneNumber}
-              onChange={handleMemberFormChange}
+              onChange={memberFormChange => handleMemberFormChange(memberFormChange)}
               placeholder="+234 000 000 0000"
               required
               className="w-full bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
@@ -77,7 +86,7 @@ const Step2Modal = ({
               type="email"
               name="email"
               value={memberForm.email}
-              onChange={handleMemberFormChange}
+              onChange={memberFormChange => handleMemberFormChange(memberFormChange)}
               placeholder="email@example.com"
               className="w-full bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 text-zinc-900 placeholder-zinc-500 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
             />
@@ -91,7 +100,7 @@ const Step2Modal = ({
             <select
               name="choirRole"
               value={memberForm.choirRole}
-              onChange={handleMemberFormChange}
+              onChange={memberFormChange => handleMemberFormChange(memberFormChange)}
               required
               className="w-full bg-zinc-100 border border-zinc-200 rounded-xl px-4 py-2 text-zinc-900 focus:outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors appearance-none cursor-pointer"
               style={{
@@ -111,7 +120,7 @@ const Step2Modal = ({
           </div>
         </div>
 
-        {/* Modal Buttons */}
+        {/* Modal Action Options */}
         <div className="mt-8 flex gap-3">
           <button
             type="button"
@@ -122,7 +131,7 @@ const Step2Modal = ({
           </button>
           <button
             type="button"
-            onClick={handleAddMember}
+            onClick={onMemberSubmit}
             className="flex-1 px-4 py-2 bg-zinc-900 text-white rounded-xl text-sm md:text-md font-semibold hover:bg-zinc-800 transition-colors cursor-pointer"
           >
             Add Member

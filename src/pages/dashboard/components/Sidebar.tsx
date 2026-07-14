@@ -15,8 +15,9 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { MouseEvent } from 'react';
+import { supabase } from '../../../config/supabaseClient';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -98,6 +99,18 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const [submenu, setSubmenu] = useState<'Transactions' | 'Reports' | null>(null);
   const submenuItems = submenu === 'Transactions' ? transactionItems : reportItems;
+
+  const [overview, setOverview] = useState({ income: 0, expenses: 0 });
+  useEffect(() => {
+    supabase.from('transactions').select('type, amount')
+      .then(({ data }) => {
+        if (!data) return;
+        const income = data.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        const expenses = data.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+        setOverview({ income, expenses });
+      })
+      .catch(() => {});
+  }, []);
 
   const openSubmenu = (
     event: MouseEvent<HTMLAnchorElement>,
@@ -282,15 +295,15 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Total Income</span>
-                    <span className="font-semibold text-green-600">GHS 45,000</span>
+                    <span className="font-semibold text-green-600">₦{overview.income.toLocaleString('en-NG')}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Total Expenses</span>
-                    <span className="font-semibold text-red-600">GHS 12,500</span>
+                    <span className="font-semibold text-red-600">₦{overview.expenses.toLocaleString('en-NG')}</span>
                   </div>
                   <div className="flex items-center justify-between border-t border-gray-200 pt-2 text-sm">
                     <span className="font-medium text-gray-900">Net Balance</span>
-                    <span className="font-bold text-blue-600">GHS 32,500</span>
+                    <span className="font-bold text-blue-600">₦{(overview.income - overview.expenses).toLocaleString('en-NG')}</span>
                   </div>
                 </div>
               </div>

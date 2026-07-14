@@ -1,21 +1,18 @@
-import { useState } from 'react';
-import type { ElementType, ReactNode } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { ElementType } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
+import { supabase } from '../../config/supabaseClient';
 import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
   CalendarDays,
-  CheckCircle2,
-  FileText,
-  HandCoins,
-  LoaderCircle,
   Menu,
   Plus,
-  Search,
   Users,
   Wallet,
+  LoaderCircle,
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 
@@ -99,144 +96,27 @@ const events = [
   { id: 2, name: 'Christmas Carol', income: 85000, expenses: 92000, profit: -7000, status: 'loss' },
 ];
 
-const levies = [
-  {
-    id: 1,
-    name: 'Harvest Levy',
-    description: 'Mandatory levy for harvest event',
-    amountPerMember: 2500,
-    totalCollected: 145000,
-    totalExpected: 200000,
-    membersPaid: 58,
-    totalMembers: 80,
-    deadline: '30/04/2026',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    name: 'Monthly Welfare',
-    description: 'Recurring welfare support levy',
-    amountPerMember: 1000,
-    totalCollected: 82000,
-    totalExpected: 80000,
-    membersPaid: 80,
-    totalMembers: 80,
-    deadline: 'Monthly',
-    status: 'Active',
-  },
-];
-
-const contributions = [
-  {
-    id: 1,
-    date: '19/02/2026',
-    description: 'Harvest event contribution',
-    source: 'Anamba Florence',
-    event: 'Harvest Committee',
-    amount: 5000,
-    mode: 'Transfer',
-    type: 'Event',
-  },
-  {
-    id: 2,
-    date: '15/02/2026',
-    description: 'General welfare contribution',
-    source: 'Joshua Okonkwo',
-    amount: 10000,
-    mode: 'Cash',
-    type: 'General',
-  },
-  {
-    id: 3,
-    date: '12/02/2026',
-    description: 'Christmas carol contribution',
-    source: 'Agu Emmanuel',
-    event: 'Christmas Carol',
-    amount: 7500,
-    mode: 'Transfer',
-    type: 'Event',
-  },
-];
-
-const members = [
-  {
-    id: 1,
-    firstName: 'Joshua',
-    lastName: 'Okonkwo',
-    phone: '+234 801 234 5678',
-    email: 'joshua@example.com',
-    role: 'Tenor',
-    debtStatus: 'critical',
-    outstandingDebt: 15000,
-    penalties: 2500,
-    totalContributions: 25000,
-    totalLevies: 80000,
-  },
-  {
-    id: 2,
-    firstName: 'Agu',
-    lastName: 'Emmanuel',
-    phone: '+234 802 345 6789',
-    email: 'agu@example.com',
-    role: 'Bass',
-    debtStatus: 'owing',
-    outstandingDebt: 12500,
-    penalties: 1000,
-    totalContributions: 45000,
-    totalLevies: 120000,
-  },
-  {
-    id: 3,
-    firstName: 'Anamba',
-    lastName: 'Florence',
-    phone: '+234 803 456 7890',
-    email: 'florence@example.com',
-    role: 'Soprano',
-    debtStatus: 'owing',
-    outstandingDebt: 8000,
-    penalties: 0,
-    totalContributions: 60000,
-    totalLevies: 150000,
-  },
-  {
-    id: 4,
-    firstName: 'Grace',
-    lastName: 'Nwosu',
-    phone: '+234 804 567 8901',
-    email: 'grace@example.com',
-    role: 'Alto',
-    debtStatus: 'clear',
-    outstandingDebt: 0,
-    penalties: 0,
-    totalContributions: 35000,
-    totalLevies: 95000,
-  },
-];
-
-const totalIncome = transactions
-  .filter((transaction) => transaction.type === 'income')
-  .reduce((total, transaction) => total + (transaction.amountPaid || 0), 0);
-const totalExpenses = transactions
-  .filter((transaction) => transaction.type === 'expense')
-  .reduce((total, transaction) => total + (transaction.amount || 0), 0);
-const cashBalance = transactions
-  .filter((transaction) => transaction.mode === 'Cash')
-  .reduce((total, transaction) => total + (transaction.amountPaid || 0) - (transaction.amount || 0), 0);
-const bankBalance = transactions
-  .filter((transaction) => transaction.mode === 'Transfer')
-  .reduce((total, transaction) => total + (transaction.amountPaid || 0) - (transaction.amount || 0), 0);
 const outstandingPledges = 0;
+
+interface IncomeFormState {
+  category: string;
+  description: string;
+  amount: string;
+  modeOfPayment: 'cash' | 'transfer';
+  memberId: string;
+  eventId: string;
+}
+
+interface ExpenseFormState {
+  category: string;
+  description: string;
+  amount: string;
+  modeOfPayment: 'cash' | 'transfer';
+  eventId: string;
+}
 
 function formatCurrency(amount: number) {
   return `₦${amount.toLocaleString()}`;
-}
-
-function PrimaryButton({ children }: { children: ReactNode }) {
-  return (
-    <button className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800 cursor-pointer">
-      {children}
-    </button>
-  );
 }
 
 function StatCard({
@@ -244,61 +124,26 @@ function StatCard({
   amount,
   icon: Icon,
   color,
+  loading,
 }: {
   title: string;
   amount: number;
   icon: ElementType;
   color: string;
+  loading?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-600">{title}</p>
-          <p className="mt-1 text-2xl font-semibold text-gray-900">{formatCurrency(amount)}</p>
+          <p className="mt-1 text-2xl font-semibold text-gray-900">
+            {loading ? 'Loading…' : formatCurrency(amount)}
+          </p>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${color}`}>
-          <Icon className="h-5 w-5 text-white" />
+          {loading ? <LoaderCircle className="h-5 w-5 text-white animate-spin" /> : <Icon className="h-5 w-5 text-white" />}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function Header({
-  title,
-  subtitle,
-  action,
-}: {
-  title: string;
-  subtitle: string;
-  action?: string;
-}) {
-  return (
-    <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-        <p className="mt-1 text-gray-600">{subtitle}</p>
-      </div>
-      {action && (
-        <PrimaryButton>
-          <Plus className="mr-2 h-4 w-4" />
-          {action}
-        </PrimaryButton>
-      )}
-    </div>
-  );
-}
-
-function SearchPanel({ placeholder }: { placeholder: string }) {
-  return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-        <input
-          className="w-full rounded-md border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-          placeholder={placeholder}
-        />
       </div>
     </div>
   );
@@ -349,22 +194,249 @@ export default function DashboardLayout() {
 }
 
 export function DashboardHome() {
-  const recentTransactions = transactions.slice(0, 5);
   const navigate = useNavigate();
+  const [cashAtHand, setCashAtHand] = useState<number>(0);
+  const [bankBalance, setBankBalance] = useState<number>(0);
+  const [outstandingDebts, setOutstandingDebts] = useState<number>(0);
+  const [totalIncomeValue, setTotalIncomeValue] = useState<number>(0);
+  const [recentActivity, setRecentActivity] = useState<Transaction[]>(transactions.slice(0, 5));
+  const [isLoadingMetrics, setIsLoadingMetrics] = useState<boolean>(true);
+  const [isLoadingActivity, setIsLoadingActivity] = useState<boolean>(true);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showIncomeModal, setShowIncomeModal] = useState<boolean>(false);
+  const [showExpenseModal, setShowExpenseModal] = useState<boolean>(false);
+  const [submitLoading, setSubmitLoading] = useState<boolean>(false);
+
+  const [incomeForm, setIncomeForm] = useState<IncomeFormState>({
+    category: '',
+    description: '',
+    amount: '',
+    modeOfPayment: 'cash',
+    memberId: '',
+    eventId: '',
+  });
+
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormState>({
+    category: '',
+    description: '',
+    amount: '',
+    modeOfPayment: 'cash',
+    eventId: '',
+  });
+
+  const fetchMetrics = async () => {
+    setIsLoadingMetrics(true);
+    setMetricsError(null);
+
+    try {
+      const [{ data: txnData, error: txnError }, { data: ledgerData, error: ledgerError }] = await Promise.all([
+        supabase.from('transactions').select('amount, type, mode_of_payment'),
+        supabase.from('member_ledgers').select('amount_due, amount_paid'),
+      ]);
+
+      if (txnError) throw txnError;
+      if (ledgerError) throw ledgerError;
+
+      const transactionsData = txnData ?? [];
+      const cashIncome = transactionsData
+        .filter((row: any) => row.type === 'income' && row.mode_of_payment === 'cash')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+
+      const cashExpense = transactionsData
+        .filter((row: any) => row.type === 'expense' && row.mode_of_payment === 'cash')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+
+      const transferIncome = transactionsData
+        .filter((row: any) => row.type === 'income' && row.mode_of_payment === 'transfer')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+
+      const transferExpense = transactionsData
+        .filter((row: any) => row.type === 'expense' && row.mode_of_payment === 'transfer')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+
+      const incomeTotal = transactionsData
+        .filter((row: any) => row.type === 'income')
+        .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+
+      const debtRows = ledgerData ?? [];
+      const totalDebt = debtRows.reduce((sum: number, row: any) => {
+        const due = Number(row.amount_due || 0);
+        const paid = Number(row.amount_paid || 0);
+        return sum + Math.max(due - paid, 0);
+      }, 0);
+
+      setCashAtHand(cashIncome - cashExpense);
+      setBankBalance(transferIncome - transferExpense);
+      setOutstandingDebts(totalDebt);
+      setTotalIncomeValue(incomeTotal);
+    } catch (error: any) {
+      console.error('Metric fetch error', error);
+      setMetricsError(error?.message || 'Unable to load metrics.');
+    } finally {
+      setIsLoadingMetrics(false);
+    }
+  };
+
+  const fetchActivity = async () => {
+    setIsLoadingActivity(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      const mapped: Transaction[] = (data ?? []).map((row: any, index: number) => ({
+        id: row.id ?? index + 1,
+        date: row.created_at ? new Date(row.created_at).toLocaleDateString() : 'Recently added',
+        category: row.category ?? 'General',
+        description: row.description ?? 'Recorded transaction',
+        source: row.recorded_by ?? 'System',
+        amount: Number(row.amount || 0),
+        amountPaid: row.type === 'income' ? Number(row.amount || 0) : undefined,
+        status: row.status ?? undefined,
+        mode: row.mode_of_payment === 'transfer' ? 'Transfer' : 'Cash',
+        type: row.type === 'income' ? 'income' : 'expense',
+      }));
+
+      setRecentActivity(mapped);
+    } catch (error: any) {
+      console.error('Activity fetch error', error);
+      setRecentActivity(transactions.slice(0, 5));
+    } finally {
+      setIsLoadingActivity(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMetrics();
+    fetchActivity();
+  }, []);
+
+  const clearToast = () => setTimeout(() => setToastMessage(null), 4000);
+
+  const handleAddIncome = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitLoading(true);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw userError || new Error('Unable to identify current user.');
+      }
+
+      const payload = {
+        type: 'income',
+        category: incomeForm.category,
+        description: incomeForm.description,
+        amount: Number(incomeForm.amount),
+        mode_of_payment: incomeForm.modeOfPayment,
+        recorded_by: user.id,
+        member_id: incomeForm.memberId || null,
+        event_id: incomeForm.eventId || null,
+      };
+
+      const { error: insertError } = await supabase.from('transactions').insert([payload]);
+      if (insertError) throw insertError;
+
+      setIncomeForm({ category: '', description: '', amount: '', modeOfPayment: 'cash', memberId: '', eventId: '' });
+      setShowIncomeModal(false);
+      setToastMessage('Income entry recorded successfully.');
+      fetchMetrics();
+      clearToast();
+    } catch (error: any) {
+      console.error('Income insert error', error);
+      setMetricsError(error?.message || 'Failed to record income.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleAddExpense = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitLoading(true);
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        throw userError || new Error('Unable to identify current user.');
+      }
+
+      const payload = {
+        type: 'expense',
+        category: expenseForm.category,
+        description: expenseForm.description,
+        amount: Number(expenseForm.amount),
+        mode_of_payment: expenseForm.modeOfPayment,
+        recorded_by: user.id,
+        event_id: expenseForm.eventId || null,
+      };
+
+      const { error: insertError } = await supabase.from('transactions').insert([payload]);
+      if (insertError) throw insertError;
+
+      setExpenseForm({ category: '', description: '', amount: '', modeOfPayment: 'cash', eventId: '' });
+      setShowExpenseModal(false);
+      setToastMessage('Expense entry recorded successfully.');
+      fetchMetrics();
+      clearToast();
+    } catch (error: any) {
+      console.error('Expense insert error', error);
+      setMetricsError(error?.message || 'Failed to record expense.');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
 
   return (
     <div className="p-8">
-      <Header
-        title="Dashboard"
-        subtitle="St Cecilia Choir Financial Overview"
-        action="Record Transaction"
-      />
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-gray-600">St Cecilia Choir Financial Overview</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setShowIncomeModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 cursor-pointer"
+          >
+            <Plus className="h-4 w-4" /> Add Income
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowExpenseModal(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 cursor-pointer"
+          >
+            <Plus className="h-4 w-4" /> Add Expense
+          </button>
+        </div>
+      </div>
+
+      {toastMessage && (
+        <div className="mb-4 rounded-xl bg-emerald-100 px-4 py-3 text-sm text-emerald-800">{toastMessage}</div>
+      )}
+      {metricsError && (
+        <div className="mb-4 rounded-xl bg-red-100 px-4 py-3 text-sm text-red-800">{metricsError}</div>
+      )}
 
       <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="Bank Balance" amount={bankBalance} icon={Banknote} color="bg-blue-600" />
-        <StatCard title="Cash Balance" amount={cashBalance} icon={Wallet} color="bg-green-600" />
-        <StatCard title="Total Income" amount={totalIncome} icon={ArrowUpRight} color="bg-emerald-600" />
-        <StatCard title="Total Expenses" amount={totalExpenses} icon={ArrowDownRight} color="bg-red-600" />
+        <StatCard title="Cash at Hand" amount={cashAtHand} icon={Wallet} color="bg-green-600" loading={isLoadingMetrics} />
+        <StatCard title="Bank Balance" amount={bankBalance} icon={Banknote} color="bg-blue-600" loading={isLoadingMetrics} />
+        <StatCard title="Outstanding Debts" amount={outstandingDebts} icon={AlertCircle} color="bg-amber-600" loading={isLoadingMetrics} />
+        <StatCard title="Total Income" amount={totalIncomeValue} icon={ArrowUpRight} color="bg-emerald-600" loading={isLoadingMetrics} />
       </div>
 
       <div className="mb-8 rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -466,7 +538,11 @@ export function DashboardHome() {
           <h2 className="font-semibold text-gray-900">Recent Activity</h2>
         </div>
         <div className="divide-y divide-gray-200">
-          {recentTransactions.map((transaction) => {
+          {isLoadingActivity ? (
+            <div className="px-6 py-6 text-sm text-gray-500">Loading activity…</div>
+          ) : recentActivity.length === 0 ? (
+            <div className="px-6 py-6 text-sm text-gray-500">No recent activity yet.</div>
+          ) : recentActivity.map((transaction) => {
             const amount = transaction.type === 'income' ? transaction.amountPaid || 0 : -(transaction.amount || 0);
 
             return (
@@ -493,484 +569,171 @@ export function DashboardHome() {
           })}
         </div>
       </div>
-    </div>
-  );
-}
 
-export function TransactionsPage() {
-  const [filter, setFilter] = useState<'all' | 'income' | 'expenses'>('all');
-  const visibleTransactions = transactions.filter((transaction) => {
-    if (filter === 'income') return transaction.type === 'income';
-    if (filter === 'expenses') return transaction.type === 'expense';
-    return true;
-  });
-
-  return (
-    <div className="p-8">
-      <Header title="Transactions" subtitle="All financial activity in one place" action="Record Transaction" />
-
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard title="Total Income" amount={totalIncome} icon={ArrowUpRight} color="bg-green-600" />
-        <StatCard title="Total Expenses" amount={totalExpenses} icon={ArrowDownRight} color="bg-red-600" />
-        <StatCard title="Net Balance" amount={totalIncome - totalExpenses} icon={Banknote} color="bg-blue-600" />
-      </div>
-
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="inline-grid grid-cols-3 rounded-md bg-gray-100 p-1 text-sm">
-            {(['all', 'income', 'expenses'] as const).map((item) => (
-              <button
-                key={item}
-                className={`rounded px-3 py-1.5 capitalize cursor-pointer ${filter === item ? 'bg-white shadow-sm' : 'text-gray-600'}`}
-                onClick={() => setFilter(item)}
-              >
-                {item === 'all' ? 'All Transactions' : item}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-full md:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input className="w-full rounded-md border border-gray-200 py-2 pl-10 pr-3 text-sm outline-none" placeholder="Search transactions..." />
-          </div>
-        </div>
-      </div>
-
-      <TransactionTable rows={visibleTransactions} />
-    </div>
-  );
-}
-
-function TransactionTable({ rows }: { rows: Transaction[] }) {
-  return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-      <table className="w-full min-w-180">
-        <thead className="border-b border-gray-200 bg-gray-50">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Date</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Description</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Category</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Mode</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Amount</th>
-            <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {rows.map((transaction) => {
-            const amount = transaction.type === 'income' ? transaction.amountPaid || 0 : transaction.amount || 0;
-
-            return (
-              <tr key={transaction.id} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{transaction.date}</td>
-                <td className="px-6 py-4 text-sm text-gray-900">
-                  <p className="font-medium">{transaction.description}</p>
-                  <p className="mt-0.5 text-xs text-gray-500">{transaction.source}</p>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{transaction.category}</td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-600">{transaction.mode}</td>
-                <td className={`whitespace-nowrap px-6 py-4 text-sm font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                  {transaction.type === 'income' ? '+' : '-'}
-                  {formatCurrency(amount)}
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">{transaction.status ? <StatusBadge status={transaction.status} /> : '-'}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-export function IncomePage() {
-  const incomeRows = transactions.filter((transaction) => transaction.type === 'income');
-
-  return (
-    <div className="p-8">
-      <Header title="Income" subtitle="All income transactions" action="Record Income" />
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Total Income</p>
-            <p className="text-3xl font-semibold text-green-600">{formatCurrency(totalIncome)}</p>
-          </div>
-          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-green-100">
-            <ArrowUpRight className="h-7 w-7 text-green-600" />
-          </div>
-        </div>
-      </div>
-      <SearchPanel placeholder="Search income transactions..." />
-      <TransactionTable rows={incomeRows} />
-    </div>
-  );
-}
-
-export function ExpensesPage() {
-  const expenseRows = transactions.filter((transaction) => transaction.type === 'expense');
-
-  return (
-    <div className="p-8">
-      <Header title="Expenses" subtitle="All expense transactions" action="Record Expense" />
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-600">Total Expenses</p>
-            <p className="text-3xl font-semibold text-red-600">{formatCurrency(totalExpenses)}</p>
-          </div>
-          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-red-100">
-            <ArrowDownRight className="h-7 w-7 text-red-600" />
-          </div>
-        </div>
-      </div>
-      <SearchPanel placeholder="Search expense transactions..." />
-      <TransactionTable rows={expenseRows} />
-    </div>
-  );
-}
-
-export function LeviesPage() {
-  const totalCollected = levies.reduce((total, levy) => total + levy.totalCollected, 0);
-  const totalExpected = levies.reduce((total, levy) => total + levy.totalExpected, 0);
-
-  return (
-    <div className="p-8">
-      <Header title="Levies" subtitle="Manage member levies and collections" action="Record Levy Payment" />
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard title="Total Collected" amount={totalCollected} icon={FileText} color="bg-green-600" />
-        <StatCard title="Total Expected" amount={totalExpected} icon={FileText} color="bg-blue-600" />
-        <StatCard title="Outstanding" amount={totalExpected - totalCollected} icon={FileText} color="bg-amber-500" />
-      </div>
-      <SearchPanel placeholder="Search levies..." />
-      <div className="space-y-4">
-        {levies.map((levy) => {
-          const progress = Math.round((levy.totalCollected / levy.totalExpected) * 100);
-
-          return (
-            <div key={levy.id} className="rounded-lg border border-gray-200 bg-white p-6">
-              <div className="mb-4 flex items-start justify-between">
-                <div>
-                  <div className="mb-2 flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900">{levy.name}</h3>
-                    <StatusBadge status={levy.status} />
-                  </div>
-                  <p className="text-sm text-gray-600">{levy.description}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Amount per member</p>
-                  <p className="text-xl font-semibold text-gray-900">{formatCurrency(levy.amountPerMember)}</p>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-4">
-                <Detail label="Collected" value={formatCurrency(levy.totalCollected)} className="text-green-600" />
-                <Detail label="Expected" value={formatCurrency(levy.totalExpected)} className="text-blue-600" />
-                <Detail label="Members Paid" value={`${levy.membersPaid} / ${levy.totalMembers}`} />
-                <Detail label="Deadline" value={levy.deadline} />
-              </div>
-              <div className="mt-4">
-                <div className="mb-1 flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Collection Progress</span>
-                  <span className="font-medium">{progress}%</span>
-                </div>
-                <div className="h-2 w-full rounded-full bg-gray-200">
-                  <div className="h-2 rounded-full bg-green-600" style={{ width: `${progress}%` }} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Detail({ label, value, className = 'text-gray-900' }: { label: string; value: string; className?: string }) {
-  return (
-    <div>
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className={`font-semibold ${className}`}>{value}</p>
-    </div>
-  );
-}
-
-export function ContributionsPage() {
-  const total = contributions.reduce((sum, contribution) => sum + contribution.amount, 0);
-  const eventTotal = contributions.filter((contribution) => contribution.type === 'Event').reduce((sum, contribution) => sum + contribution.amount, 0);
-  const generalTotal = total - eventTotal;
-
-  return (
-    <div className="p-8">
-      <Header title="Contributions" subtitle="Voluntary contributions from members" action="Record Contribution" />
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
-        <StatCard title="Total Contributions" amount={total} icon={HandCoins} color="bg-blue-600" />
-        <StatCard title="Event Contributions" amount={eventTotal} icon={HandCoins} color="bg-purple-600" />
-        <StatCard title="General Contributions" amount={generalTotal} icon={HandCoins} color="bg-green-600" />
-      </div>
-      <SearchPanel placeholder="Search contributions..." />
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="w-full min-w-180">
-          <thead className="border-b border-gray-200 bg-gray-50">
-            <tr>
-              {['Date', 'Description', 'Contributor', 'Type', 'Amount'].map((heading) => (
-                <th key={heading} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {contributions.map((contribution) => (
-              <tr key={contribution.id} className="hover:bg-gray-50">
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{contribution.date}</td>
-                <td className="px-6 py-4 text-sm text-gray-900">
-                  <p className="font-medium">{contribution.description}</p>
-                  {contribution.event && <p className="mt-0.5 text-xs text-gray-500">{contribution.event}</p>}
-                </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{contribution.source}</td>
-                <td className="whitespace-nowrap px-6 py-4"><StatusBadge status={contribution.type} /></td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm font-semibold text-blue-600">{formatCurrency(contribution.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-export function MembersPage() {
-  const stats = {
-    total: members.length,
-    clear: members.filter((member) => member.debtStatus === 'clear').length,
-    owing: members.filter((member) => member.debtStatus === 'owing').length,
-    critical: members.filter((member) => member.debtStatus === 'critical').length,
-    totalDebt: members.reduce((sum, member) => sum + member.outstandingDebt + member.penalties, 0),
-  };
-
-  return (
-    <div className="p-8">
-      <Header title="Members" subtitle={`${stats.total} total members`} action="Add Member" />
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MemberStat label="Clear Status" value={stats.clear.toString()} helper="No outstanding debts" icon={CheckCircle2} />
-        <MemberStat label="Owing" value={stats.owing.toString()} helper="Have some debts" icon={AlertCircle} color="text-amber-600" />
-        <MemberStat label="Critical" value={stats.critical.toString()} helper="High debt levels" icon={AlertCircle} color="text-red-600" />
-        <MemberStat label="Total Debt" value={formatCurrency(stats.totalDebt)} helper="Outstanding + Penalties" icon={AlertCircle} danger />
-      </div>
-      <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex flex-col gap-4 md:flex-row">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input className="w-full rounded-md border border-gray-200 py-2 pl-10 pr-3 text-sm outline-none" placeholder="Search by name, phone, or email..." />
-          </div>
-          <div className="grid grid-cols-4 rounded-md bg-gray-100 p-1 text-xs">
-            {['All', 'Clear', 'Owing', 'Critical'].map((item, index) => (
-              <button key={item} className={`rounded px-3 py-2 cursor-pointer ${index === 0 ? 'bg-white shadow-sm' : 'text-gray-600'}`}>
-                {item}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {members.map((member) => (
-          <div key={member.id} className="rounded-lg border border-gray-200 bg-white p-5">
-            <div className="mb-4 flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gray-100">
-                  <Users className="h-5 w-5 text-gray-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{member.firstName} {member.lastName}</h3>
-                  <p className="text-sm text-gray-500">{member.role}</p>
-                </div>
-              </div>
-              <StatusBadge status={member.debtStatus} />
-            </div>
-            <div className="space-y-2 text-sm">
-              <p className="text-gray-600">{member.phone}</p>
-              <p className="text-gray-600">{member.email}</p>
-              <div className="border-t border-gray-200 pt-3">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Outstanding</span>
-                  <span className="font-semibold text-red-600">{formatCurrency(member.outstandingDebt + member.penalties)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function MemberStat({
-  label,
-  value,
-  helper,
-  icon: Icon,
-  color = 'text-green-600',
-  danger = false,
-}: {
-  label: string;
-  value: string;
-  helper: string;
-  icon: ElementType;
-  color?: string;
-  danger?: boolean;
-}) {
-  return (
-    <div className={`rounded-lg border p-4 ${danger ? 'border-red-200 bg-red-50' : 'border-gray-200 bg-white'}`}>
-      <div className="mb-2 flex items-center justify-between">
-        <span className={`text-sm ${danger ? 'text-red-700' : 'text-gray-600'}`}>{label}</span>
-        <Icon className={`h-5 w-5 ${danger ? 'text-red-600' : color}`} />
-      </div>
-      <p className={`text-2xl font-semibold ${danger ? 'text-red-700' : 'text-gray-900'}`}>{value}</p>
-      <p className={`mt-1 text-xs ${danger ? 'text-red-600' : 'text-gray-500'}`}>{helper}</p>
-    </div>
-  );
-}
-
-export function EventsPage() {
-  return (
-    <div className="p-8">
-      <Header title="Events" subtitle="Track event income, expenses, and outcomes" action="Add Event" />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {events.map((event) => (
-          <div key={event.id} className="rounded-lg border border-gray-200 bg-white p-6">
+      {showIncomeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">{event.name}</h3>
-              <StatusBadge status={event.status === 'profit' ? 'Profit' : 'Loss'} />
-            </div>
-            <div className="grid grid-cols-3 gap-4 border-t border-gray-200 pt-4">
-              <Detail label="Income" value={formatCurrency(event.income)} className="text-green-600" />
-              <Detail label="Expenses" value={formatCurrency(event.expenses)} className="text-red-600" />
-              <Detail label="Net" value={`${event.profit > 0 ? '+' : ''}${formatCurrency(event.profit)}`} className={event.profit > 0 ? 'text-green-600' : 'text-red-600'} />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function ReportsPage({ type = 'overview' }: { type?: 'overview' | 'financial' | 'members' }) {
-  const heading = type === 'financial' ? 'Financial Reports' : type === 'members' ? 'Member Activity' : 'Financial Reports';
-
-  return (
-    <div className="p-8">
-      <Header title={heading} subtitle="View insights and reports" action="Go to Transactions" />
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <StatCard title="Total Income" amount={totalIncome} icon={ArrowUpRight} color="bg-green-600" />
-        <StatCard title="Total Expenses" amount={totalExpenses} icon={ArrowDownRight} color="bg-red-600" />
-        <StatCard title="Cash Balance" amount={cashBalance} icon={Wallet} color="bg-blue-600" />
-        <StatCard title="Bank Balance" amount={bankBalance} icon={Banknote} color="bg-blue-600" />
-      </div>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 text-lg font-semibold text-gray-900">Income Breakdown</h3>
-          {['Levies', 'Contributions', 'Other Income'].map((name, index) => (
-            <ReportBar key={name} label={name} value={[120000, 45000, 22500][index]} total={187500} />
-          ))}
-        </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 text-lg font-semibold text-gray-900">Expense Breakdown</h3>
-          {['Transport', 'Welfare', 'Entertainment'].map((name, index) => (
-            <ReportBar key={name} label={name} value={[15000, 9700, 30000][index]} total={54700} danger />
-          ))}
-        </div>
-      </div>
-      <p className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
-        All reports are automatically generated from your recorded transactions. To update these reports, add or modify transactions in the Transactions section.
-      </p>
-    </div>
-  );
-}
-
-function ReportBar({ label, value, total, danger = false }: { label: string; value: number; total: number; danger?: boolean }) {
-  const width = Math.round((value / total) * 100);
-
-  return (
-    <div className="mb-4">
-      <div className="mb-1 flex items-center justify-between text-sm">
-        <span className="font-medium text-gray-700">{label}</span>
-        <span className="font-semibold text-gray-900">{formatCurrency(value)}</span>
-      </div>
-      <div className="h-2 rounded-full bg-gray-200">
-        <div className={`h-2 rounded-full ${danger ? 'bg-red-600' : 'bg-green-600'}`} style={{ width: `${width}%` }} />
-      </div>
-    </div>
-  );
-}
-
-export function SettingsPage() {
-  return (
-    <div className="p-8">
-      <Header title="Settings" subtitle="Configure organization and financial controls" />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 font-semibold text-gray-900">Organization</h3>
-          <label className="text-sm font-medium text-gray-700">Organization Name</label>
-          <input className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm" defaultValue="St Cecilia Choir" />
-          <label className="mt-4 block text-sm font-medium text-gray-700">Financial Year Start Month</label>
-          <input className="mt-1 w-full rounded-md border border-gray-200 px-3 py-2 text-sm" defaultValue="January" />
-        </div>
-        <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <h3 className="mb-4 font-semibold text-gray-900">Financial Controls</h3>
-          {['Allow Backdated Transactions', 'Require Approval for Expenses', 'Members Directory'].map((setting, index) => (
-            <div key={setting} className="flex items-center justify-between border-b border-gray-100 py-3 last:border-0">
-              <p className="font-medium text-gray-900">{setting}</p>
-              <div className={`h-6 w-11 rounded-full p-1 ${index === 1 ? 'bg-gray-300' : 'bg-blue-600'}`}>
-                <div className={`h-4 w-4 rounded-full bg-white transition ${index === 1 ? '' : 'translate-x-5'}`} />
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Add Income</h2>
+                <p className="text-sm text-gray-500">Record a new income transaction.</p>
               </div>
+              <button type="button" onClick={() => setShowIncomeModal(false)} className="text-gray-500 hover:text-gray-900 cursor-pointer">Cancel</button>
             </div>
-          ))}
+            <form onSubmit={handleAddIncome} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Category</label>
+                <input
+                  value={incomeForm.category}
+                  onChange={(e) => setIncomeForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="e.g. Levy"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <input
+                  value={incomeForm.description}
+                  onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="Income source or note"
+                  required
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Amount</label>
+                  <input
+                    value={incomeForm.amount}
+                    onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Mode of Payment</label>
+                  <select
+                    value={incomeForm.modeOfPayment}
+                    onChange={(e) => setIncomeForm((prev) => ({ ...prev, modeOfPayment: e.target.value as 'cash' | 'transfer' }))}
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Member ID</label>
+                  <input
+                    value={incomeForm.memberId}
+                    onChange={(e) => setIncomeForm((prev) => ({ ...prev, memberId: e.target.value }))}
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="Optional member id"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Event ID</label>
+                  <input
+                    value={incomeForm.eventId}
+                    onChange={(e) => setIncomeForm((prev) => ({ ...prev, eventId: e.target.value }))}
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="Optional event id"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setShowIncomeModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={submitLoading} className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 cursor-pointer">
+                  {submitLoading ? 'Saving...' : 'Save Income'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-export function UserManagementPage() {
-  const users = [
-    { name: 'Admin User', email: 'admin@stcecilia.org', role: 'Choir Admin', status: 'Active' },
-    { name: 'Finance Secretary', email: 'finance@stcecilia.org', role: 'Financial Secretary', status: 'Active' },
-  ];
-
-  return (
-    <div className="p-8">
-      <Header title="User Management" subtitle="Invite and manage team access" action="Invite User" />
-      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <table className="w-full min-w-160">
-          <thead className="border-b border-gray-200 bg-gray-50">
-            <tr>
-              {['Name', 'Email', 'Role', 'Status'].map((heading) => (
-                <th key={heading} className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">
-                  {heading}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {users.map((user) => (
-              <tr key={user.email} className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm font-medium text-gray-900">{user.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{user.email}</td>
-                <td className="px-6 py-4 text-sm text-gray-900">{user.role}</td>
-                <td className="px-6 py-4"><StatusBadge status={user.status} /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-export function LoadingPage() {
-  return (
-    <div className="flex min-h-100 items-center justify-center p-8">
-      <div className="text-center">
-        <LoaderCircle className="mx-auto mb-3 h-8 w-8 animate-spin text-gray-400" />
-        <p className="text-gray-600">Loading dashboard...</p>
-      </div>
+      {showExpenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Add Expense</h2>
+                <p className="text-sm text-gray-500">Record a new expense transaction.</p>
+              </div>
+              <button type="button" onClick={() => setShowExpenseModal(false)} className="text-gray-500 hover:text-gray-900 cursor-pointer">Cancel</button>
+            </div>
+            <form onSubmit={handleAddExpense} className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">Category</label>
+                <input
+                  value={expenseForm.category}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, category: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="e.g. Transport"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <input
+                  value={expenseForm.description}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="Expense detail"
+                  required
+                />
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Amount</label>
+                  <input
+                    value={expenseForm.amount}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                    placeholder="0.00"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Mode of Payment</label>
+                  <select
+                    value={expenseForm.modeOfPayment}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, modeOfPayment: e.target.value as 'cash' | 'transfer' }))}
+                    className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">Event ID</label>
+                <input
+                  value={expenseForm.eventId}
+                  onChange={(e) => setExpenseForm((prev) => ({ ...prev, eventId: e.target.value }))}
+                  className="mt-2 w-full rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+                  placeholder="Optional event id"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <button type="button" onClick={() => setShowExpenseModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+                <button type="submit" disabled={submitLoading} className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60 cursor-pointer">
+                  {submitLoading ? 'Saving...' : 'Save Expense'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

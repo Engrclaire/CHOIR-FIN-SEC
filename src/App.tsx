@@ -1,12 +1,14 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Login from './auth/Login';
-import Onboarding from './auth/onboarding/Onboarding';
+import Onboarding from './auth/onboarding/PremiumOnboarding';
+import Landing from './pages/Landing';
 import { ToastProvider } from './contexts/ToastContext';
+import { AuthProvider } from './contexts/AuthContext';
 
 import DashboardLayout from './pages/dashboard/dashboard';
+import DashboardHome from './pages/dashboard/pages/DashboardHome';
 import {
   ContributionsPage,
-  DashboardHome,
   EventDetailsPage,
   EventsPage,
   ExpensesPage,
@@ -20,14 +22,25 @@ import {
   UserManagementPage,
 } from './pages/dashboard/pages/DashboardPages';
 
+function RootRoute() {
+  // If user hasn't completed onboarding before, send them to onboarding
+  const completed = typeof window !== 'undefined' && localStorage.getItem('completedOnboarding') === 'true';
+  return completed ? <Login /> : <Navigate to="/onboarding" replace />;
+}
+
 function App() {
   return (
     <Router>
       <ToastProvider>
+      <AuthProvider>
       <Routes>
         {/* Public Routes */}
-        <Route path="/" element={<Login />} />
+        
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Onboarding />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/home" element={<RootRoute />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardHome />} />
@@ -64,6 +77,7 @@ function App() {
           </div>
         } />
       </Routes>
+      </AuthProvider>
       </ToastProvider>
     </Router>
   );
