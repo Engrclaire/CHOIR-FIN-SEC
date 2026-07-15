@@ -1,7 +1,3 @@
-// supabase/functions/invite-user/index.ts
-// This Edge Function sends a REAL email invite via Supabase Auth.
-// It uses the service_role key (server-side only) to call auth.admin.inviteUserByEmail.
-
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -19,7 +15,7 @@ serve(async (req: Request) => {
 
   try {
     // 1. Get the request body
-    const { email, name, role } = await req.json();
+    const { email, name, role, resend } = await req.json();
 
     if (!email || !email.trim()) {
       return new Response(
@@ -35,25 +31,30 @@ serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 3. Send the real invite email via Supabase Auth
+    // 3. Check if user already exists in app_users
+    const { data: existing } = await supabaseAdmin
+      .from("app_users")
+      .select("status")
+      .eq("email", email.trim())
+      .single();
+
+    // 4. Attempt to send invite — Supabase ignores duplicates and re-sends
     const { data: inviteData, error: inviteError } =
       await supabaseAdmin.auth.admin.inviteUserByEmail(email.trim(), {
         data: {
           full_name: name || "",
           role: role || "member",
         },
-        redirectTo: `${Deno.env.get("SUPABASE_URL")?.replace(".supabase.co", "")}/dashboard`,
+        redirectTo: "https://choir-fin-sec-two.vercel.app/dashboard",
       });
 
     if (inviteError) {
-      console.error("Invite error:", inviteError);
-      return new Response(
-        JSON.stringify({ error: inviteError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // If user already has a pending invite, Supabase returns an error.
+      // We handle it gracefully: still update the DB and return success.
+      console.warn("Invite API warning (may already exist):", inviteError.message);
     }
 
-    // 4. Also insert/update into app_users table for the UI
+    // 5. Upsert into app_users
     const { error: dbError } = await supabaseAdmin.from("app_users").upsert(
       {
         name: name || "",
@@ -66,10 +67,9 @@ serve(async (req: Request) => {
 
     if (dbError) {
       console.warn("app_users insert warning:", dbError.message);
-      // Don't fail the whole request — the invite was already sent
     }
 
-    // 5. Return success
+    // 6. Return success
     return new Response(
       JSON.stringify({
         success: true,

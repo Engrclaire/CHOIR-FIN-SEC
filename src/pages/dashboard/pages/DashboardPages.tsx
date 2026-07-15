@@ -2396,17 +2396,16 @@ export function UserManagementPage() {
     }
     setSaving(true);
     try {
-      // Call the Edge Function which uses the service_role key to send a real invite email
       const { data, error: fnError } = await supabase.functions.invoke('invite-user', {
         body: {
           name: inviteForm.name.trim(),
           email: inviteForm.email.trim(),
           role: inviteForm.role,
+          resend: true,
         },
       });
 
       if (fnError) {
-        // Try to parse the error message from the function response
         const msg = fnError?.message || (data as any)?.error || 'Failed to send invite.';
         throw new Error(msg);
       }
@@ -2422,7 +2421,6 @@ export function UserManagementPage() {
       fetchUsers();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to invite user.';
-      // Provide helpful guidance if the Edge Function is not deployed yet
       if (msg.includes('Failed to fetch') || msg.includes('FunctionsError') || msg.includes('not found')) {
         setInviteError('Edge Function not deployed yet. Run: supabase functions deploy invite-user');
       } else {
