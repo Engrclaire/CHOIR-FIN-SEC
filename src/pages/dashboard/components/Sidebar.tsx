@@ -102,14 +102,13 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const [overview, setOverview] = useState({ income: 0, expenses: 0 });
   useEffect(() => {
-    supabase.from('transactions').select('type, amount')
-      .then(({ data }) => {
-        if (!data) return;
-        const income = data.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
-        const expenses = data.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
-        setOverview({ income, expenses });
-      })
-      .catch(() => {});
+    (async () => {
+      const { data } = await supabase.from('transactions').select('type, amount');
+      if (!data) return;
+      const income = data.filter((t: any) => t.type === 'income').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+      const expenses = data.filter((t: any) => t.type === 'expense').reduce((s: number, t: any) => s + Number(t.amount || 0), 0);
+      setOverview({ income, expenses });
+    })();
   }, []);
 
   const openSubmenu = (

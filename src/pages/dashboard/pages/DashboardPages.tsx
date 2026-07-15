@@ -11,7 +11,6 @@ import {
   CalendarDays,
   CheckCircle,
   CircleDollarSign,
-  Clock,
   FileText,
   HandCoins,
   Plus,
@@ -697,11 +696,10 @@ export function IncomePage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    supabase.from('transactions').select('*').eq('type', 'income').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setTransactions((data ?? []).map((t: any) => ({ ...t, mode: t.mode_of_payment === 'cash' ? 'Cash' : 'Transfer' })));
-      })
-      .catch(console.error);
+    (async () => {
+      const { data, error } = await supabase.from('transactions').select('*').eq('type', 'income').order('created_at', { ascending: false });
+      if (!error) setTransactions((data ?? []).map((t: any) => ({ ...t, mode: t.mode_of_payment === 'cash' ? 'Cash' : 'Transfer' })));
+    })();
   }, []);
 
   const totalIncome = transactions.reduce((sum, t) => sum + (t.amountPaid || 0), 0);
@@ -730,11 +728,10 @@ export function ExpensesPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   useEffect(() => {
-    supabase.from('transactions').select('*').eq('type', 'expense').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setTransactions((data ?? []).map((t: any) => ({ ...t, mode: t.mode_of_payment === 'cash' ? 'Cash' : 'Transfer' })));
-      })
-      .catch(console.error);
+    (async () => {
+      const { data, error } = await supabase.from('transactions').select('*').eq('type', 'expense').order('created_at', { ascending: false });
+      if (!error) setTransactions((data ?? []).map((t: any) => ({ ...t, mode: t.mode_of_payment === 'cash' ? 'Cash' : 'Transfer' })));
+    })();
   }, []);
 
   const totalExpenses = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
@@ -763,20 +760,19 @@ export function LeviesPage() {
   const [levies, setLevies] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from('levies').select('*').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setLevies((data ?? []).map((l: any) => ({
-          ...l,
-          name: l.title,
-          totalCollected: Number(l.total_collected || 0),
-          totalExpected: Number(l.total_expected || 0),
-          amountPerMember: Number(l.amount_per_member || 0),
-          membersPaid: Number(l.members_paid || 0),
-          totalMembers: Number(l.total_members || 0),
-          deadline: l.deadline || '',
-        })));
-      })
-      .catch(console.error);
+    (async () => {
+      const { data, error } = await supabase.from('levies').select('*').order('created_at', { ascending: false });
+      if (!error) setLevies((data ?? []).map((l: any) => ({
+        ...l,
+        name: l.title,
+        totalCollected: Number(l.total_collected || 0),
+        totalExpected: Number(l.total_expected || 0),
+        amountPerMember: Number(l.amount_per_member || 0),
+        membersPaid: Number(l.members_paid || 0),
+        totalMembers: Number(l.total_members || 0),
+        deadline: l.deadline || '',
+      })));
+    })();
   }, []);
 
   const totalCollected = levies.reduce((total, levy) => total + (levy.totalCollected || 0), 0);
@@ -837,11 +833,10 @@ export function ContributionsPage() {
   const [contributions, setContributions] = useState<any[]>([]);
 
   useEffect(() => {
-    supabase.from('contributions').select('*').order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error) setContributions(data ?? []);
-      })
-      .catch(console.error);
+    (async () => {
+      const { data, error } = await supabase.from('contributions').select('*').order('created_at', { ascending: false });
+      if (!error) setContributions(data ?? []);
+    })();
   }, []);
 
   const total = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
