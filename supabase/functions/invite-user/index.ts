@@ -31,9 +31,9 @@ serve(async (req: Request) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 3. Check if user already exists in app_users
+    // 3. Check if user already exists
     const { data: existing } = await supabaseAdmin
-      .from("app_users")
+      .from("users")
       .select("status")
       .eq("email", email.trim())
       .single();
@@ -54,8 +54,8 @@ serve(async (req: Request) => {
       console.warn("Invite API warning (may already exist):", inviteError.message);
     }
 
-    // 5. Upsert into app_users
-    const { error: dbError } = await supabaseAdmin.from("app_users").upsert(
+    // 5. Upsert into users table
+    const { error: dbError } = await supabaseAdmin.from("users").upsert(
       {
         name: name || "",
         email: email.trim(),
@@ -66,7 +66,7 @@ serve(async (req: Request) => {
     );
 
     if (dbError) {
-      console.warn("app_users insert warning:", dbError.message);
+      console.warn("users insert warning:", dbError.message);
     }
 
     // 6. Return success

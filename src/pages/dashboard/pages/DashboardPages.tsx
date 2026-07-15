@@ -2372,7 +2372,7 @@ export function UserManagementPage() {
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
-        .from('app_users')
+        .from('users')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -2436,7 +2436,7 @@ export function UserManagementPage() {
     if (!confirm(`Remove "${userName}" from the system? This cannot be undone.`)) return;
     setDeletingId(userId);
     try {
-      const { error } = await supabase.from('app_users').delete().eq('id', userId);
+      const { error } = await supabase.from('users').delete().eq('id', userId);
       if (error) throw error;
       fetchUsers();
     } catch (err) {
