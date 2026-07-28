@@ -247,8 +247,32 @@ function RecordTransactionPanel({ onClose, onSaveSuccess }: { onClose: () => voi
     description: '',
     amount: '',
     mode_of_payment: 'transfer',
+    event_id: '',
   });
   const [saving, setSaving] = useState(false);
+  const [userName, setUserName] = useState<string>('');
+  const [eventsList, setEventsList] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        setUserName(profile?.full_name || user.email || 'Unknown');
+      }
+
+      const { data: events } = await supabase
+        .from('events')
+        .select('id, name')
+        .eq('is_settled', false)
+        .order('created_at', { ascending: false });
+      setEventsList((events ?? []).map((e: any) => ({ id: e.id, name: e.name })));
+    })();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,6 +298,7 @@ function RecordTransactionPanel({ onClose, onSaveSuccess }: { onClose: () => voi
         type: formData.type || 'expense',
         category: formData.category || 'General',
         mode_of_payment: formData.mode_of_payment,
+        event_id: formData.event_id || null,
         financial_year_id: yearData?.id ?? null,
         recorded_by: user?.id ?? null,
       }]);
@@ -327,6 +352,25 @@ function RecordTransactionPanel({ onClose, onSaveSuccess }: { onClose: () => voi
             <option>Transport</option>
             <option>Welfare</option>
           </select>
+        </Field>
+        <Field label="Event (Optional)">
+          <select
+            value={formData.event_id}
+            onChange={(e) => setFormData({ ...formData, event_id: e.target.value })}
+            className="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm outline-none"
+          >
+            <option value="">General (No Event)</option>
+            {eventsList.map((evt) => (
+              <option key={evt.id} value={evt.id}>{evt.name}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Recorded By">
+          <input
+            value={userName}
+            readOnly
+            className="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none cursor-not-allowed"
+          />
         </Field>
         <Field label="Description">
           <input
@@ -1175,6 +1219,14 @@ export function MemberDetailsPage() {
   const [member, setMember] = useState<Member | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPenaltyModal, setShowPenaltyModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'transfer'>('cash');
+  const [paymentDesc, setPaymentDesc] = useState('');
+  const [penaltyAmount, setPenaltyAmount] = useState('');
+  const [penaltyDesc, setPenaltyDesc] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -1221,6 +1273,121 @@ export function MemberDetailsPage() {
     };
     load();
   }, [id]);
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentAmount || !paymentDesc) return;
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const { error } = await supabase.from('transactions').insert([{
+        type: 'income',
+        category: 'Levy',
+        description: paymentDesc,
+        amount: Number(paymentAmount),
+        mode_of_payment: paymentMode,
+        member_id: id,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+      }]);
+      if (error) throw error;
+      setShowPaymentModal(false);
+      setPaymentAmount('');
+      setPaymentDesc('');
+      setPaymentMode('cash');
+      const { data: mData } = await supabase.from('members').select('*').eq('id', id).maybeSingle();
+      if (mData) {
+        setMember({
+          id: mData.id,
+          firstName: mData.first_name,
+          lastName: mData.last_name,
+          phone: mData.phone || '',
+          email: mData.email || '',
+          role: mData.role || '',
+          debtStatus: mData.debt_status || 'clear',
+          outstandingDebt: mData.outstanding_debt || 0,
+          penalties: mData.penalties || 0,
+          totalPaid: (mData.total_levies || 0) + (mData.total_contributions || 0),
+          totalLevies: mData.total_levies || 0,
+          contributions: mData.total_contributions || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Error recording payment:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAddPenalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!penaltyAmount) return;
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const { error: txnError } = await supabase.from('transactions').insert([{
+        type: 'expense',
+        category: 'Penalty',
+        description: penaltyDesc || 'Member penalty',
+        amount: Number(penaltyAmount),
+        mode_of_payment: 'cash',
+        member_id: id,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+      }]);
+      if (txnError) throw txnError;
+
+      const { error: updateError } = await supabase
+        .from('members')
+        .update({ penalties: (member?.penalties || 0) + Number(penaltyAmount) })
+        .eq('id', id);
+      if (updateError) throw updateError;
+
+      setShowPenaltyModal(false);
+      setPenaltyAmount('');
+      setPenaltyDesc('');
+      const { data: mData } = await supabase.from('members').select('*').eq('id', id).maybeSingle();
+      if (mData) {
+        setMember({
+          id: mData.id,
+          firstName: mData.first_name,
+          lastName: mData.last_name,
+          phone: mData.phone || '',
+          email: mData.email || '',
+          role: mData.role || '',
+          debtStatus: mData.debt_status || 'clear',
+          outstandingDebt: mData.outstanding_debt || 0,
+          penalties: mData.penalties || 0,
+          totalPaid: (mData.total_levies || 0) + (mData.total_contributions || 0),
+          totalLevies: mData.total_levies || 0,
+          contributions: mData.total_contributions || 0,
+        });
+      }
+    } catch (err) {
+      console.error('Error adding penalty:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleWaiveDebt = async () => {
+    if (!confirm(`Waive all outstanding debt for ${member?.firstName} ${member?.lastName}? This action cannot be undone.`)) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('members')
+        .update({ outstanding_debt: 0, penalties: 0, debt_status: 'clear' })
+        .eq('id', id);
+      if (error) throw error;
+      setMember((prev) => prev ? { ...prev, outstandingDebt: 0, penalties: 0, debtStatus: 'clear' } : prev);
+    } catch (err) {
+      console.error('Error waiving debt:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <div className="p-8"><div className="py-12 text-center text-sm text-gray-500 animate-pulse">Loading member profile...</div></div>;
   if (!member) return <div className="p-8"><div className="py-12 text-center text-sm text-gray-500">Member not found.</div></div>;
@@ -1349,13 +1516,13 @@ export function MemberDetailsPage() {
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-5">
             <h3 className="mb-3 font-semibold text-gray-900">Quick Actions</h3>
             <div className="space-y-2">
-              <button type="button" className="flex w-full items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-black">
+              <button type="button" onClick={() => setShowPaymentModal(true)} className="flex w-full items-center gap-2 rounded-lg bg-gray-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-black cursor-pointer">
                 <Plus className="h-4 w-4" /> Record Payment
               </button>
-              <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button type="button" onClick={() => setShowPenaltyModal(true)} className="flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">
                 <FileText className="h-4 w-4" /> Add Penalty
               </button>
-              <button type="button" className="flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button type="button" onClick={handleWaiveDebt} disabled={saving || (member?.outstandingDebt === 0 && member?.penalties === 0)} className="flex w-full items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 cursor-pointer">
                 <CircleDollarSign className="h-4 w-4" /> Waive Debt
               </button>
             </div>
@@ -1378,6 +1545,54 @@ export function MemberDetailsPage() {
           )}
         </div>
       </div>
+
+      {/* Record Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Record Payment for {member.firstName} {member.lastName}</h3>
+            <form onSubmit={handleRecordPayment} className="mt-4 space-y-4">
+              <Field label="Description">
+                <input value={paymentDesc} onChange={(e) => setPaymentDesc(e.target.value)} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="e.g. January levy payment" required />
+              </Field>
+              <Field label="Amount (₦)">
+                <input value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} type="number" min="0" step="0.01" className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="0.00" required />
+              </Field>
+              <Field label="Payment Mode">
+                <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as 'cash' | 'transfer')} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none">
+                  <option value="cash">Cash</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </Field>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowPaymentModal(false)} className="rounded-md border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+                <PrimaryButton type="submit" disabled={saving}>{saving ? 'Saving...' : 'Record Payment'}</PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Penalty Modal */}
+      {showPenaltyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Add Penalty for {member.firstName} {member.lastName}</h3>
+            <form onSubmit={handleAddPenalty} className="mt-4 space-y-4">
+              <Field label="Penalty Reason">
+                <input value={penaltyDesc} onChange={(e) => setPenaltyDesc(e.target.value)} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="e.g. Late attendance" />
+              </Field>
+              <Field label="Penalty Amount (₦)">
+                <input value={penaltyAmount} onChange={(e) => setPenaltyAmount(e.target.value)} type="number" min="0" step="0.01" className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="0.00" required />
+              </Field>
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShowPenaltyModal(false)} className="rounded-md border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+                <PrimaryButton type="submit" disabled={saving}>{saving ? 'Saving...' : 'Add Penalty'}</PrimaryButton>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1398,7 +1613,12 @@ export function EventsPage() {
     name: '',
     is_committee_run: false,
     budget: '',
+    deadline: '',
   });
+  const [settleModalEvent, setSettleModalEvent] = useState<any>(null);
+  const [bulkPenaltyEvent, setBulkPenaltyEvent] = useState<any>(null);
+  const [bulkPenaltyAmount, setBulkPenaltyAmount] = useState('');
+  const [bulkPenaltyReason, setBulkPenaltyReason] = useState('');
 
   const fetchEvents = async () => {
     setLoading(true);
@@ -1464,13 +1684,14 @@ export function EventsPage() {
         financial_year_id: yearData?.id ?? null,
         committee_lead_id: user?.id ?? null,
         committee_balance: newEvent.budget ? Number(newEvent.budget) : 0,
+        deadline: newEvent.deadline || null,
       };
 
       const { error: insertError } = await supabase.from('events').insert([payload]);
       if (insertError) throw insertError;
 
       setShowAddEventModal(false);
-      setNewEvent({ name: '', is_committee_run: false, budget: '' });
+      setNewEvent({ name: '', is_committee_run: false, budget: '', deadline: '' });
       void fetchEvents();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create event.';
@@ -1481,17 +1702,18 @@ export function EventsPage() {
     }
   };
 
-  const handleSettleEvent = async (eventId: string, eventName: string) => {
-    if (!confirm(`Mark "${eventName}" as settled? This records the final balance.`)) return;
+  const handleSettleEvent = async (eventId: string) => {
+    if (!settleModalEvent) return;
+    const fin = eventFinancials[eventId] || { income: 0, expenses: 0 };
+    const net = fin.income - fin.expenses;
     setSettlingId(eventId);
     try {
-      const fin = eventFinancials[eventId] || { income: 0, expenses: 0 };
-      const net = fin.income - fin.expenses;
       const { error } = await supabase
         .from('events')
         .update({ is_settled: true, committee_balance: net })
         .eq('id', eventId);
       if (error) throw error;
+      setSettleModalEvent(null);
       fetchEvents();
     } catch (err) {
       console.error('Error settling event:', err);
@@ -1516,6 +1738,45 @@ export function EventsPage() {
     }
   };
 
+  const handleBulkPenalty = async () => {
+    if (!bulkPenaltyEvent || !bulkPenaltyAmount || Number(bulkPenaltyAmount) <= 0) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const { data: ledgerData, error: ledgerError } = await supabase
+        .from('member_ledgers')
+        .select('id, member_id')
+        .eq('event_id', bulkPenaltyEvent.id)
+        .eq('is_cleared', false);
+      if (ledgerError) throw ledgerError;
+
+      const penalties = (ledgerData ?? []).map((ledger: any) => ({
+        type: 'expense',
+        category: 'Penalty',
+        description: bulkPenaltyReason || `Bulk penalty for ${bulkPenaltyEvent.name}`,
+        amount: Number(bulkPenaltyAmount),
+        mode_of_payment: 'cash',
+        member_id: ledger.member_id,
+        event_id: bulkPenaltyEvent.id,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+      }));
+
+      if (penalties.length > 0) {
+        const { error: insertError } = await supabase.from('transactions').insert(penalties);
+        if (insertError) throw insertError;
+      }
+
+      setBulkPenaltyEvent(null);
+      setBulkPenaltyAmount('');
+      setBulkPenaltyReason('');
+      fetchEvents();
+    } catch (err) {
+      console.error('Error applying bulk penalties:', err);
+      alert('Failed to apply bulk penalties.');
+    }
+  };
+
   const filteredEvents = (events ?? []).filter((event: any) => {
     const matchesFilter = filter === 'all' ||
       (filter === 'Settled' && event.is_settled) ||
@@ -1534,7 +1795,7 @@ export function EventsPage() {
   return (
     <div className="p-8">
       <Header title="Events" subtitle="Manage event budgets, income, expenses and results" action="Create Event" actionOnClick={() => {
-        setNewEvent({ name: '', is_committee_run: false, budget: '' });
+        setNewEvent({ name: '', is_committee_run: false, budget: '', deadline: '' });
         setFormErrors(null);
         setShowAddEventModal(true);
       }} />
@@ -1559,6 +1820,14 @@ export function EventsPage() {
               onChange={(e) => setNewEvent((prev) => ({ ...prev, budget: e.target.value }))}
               className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               placeholder="0.00"
+            />
+          </Field>
+          <Field label="Deadline (Optional)">
+            <input
+              type="date"
+              value={newEvent.deadline}
+              onChange={(e) => setNewEvent((prev) => ({ ...prev, deadline: e.target.value }))}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
             />
           </Field>
           <Field label="Event Type">
@@ -1743,6 +2012,14 @@ export function EventsPage() {
                     <span className="font-medium text-gray-700">{formatCurrency(budget)}</span>
                   </div>
                 )}
+                {event.deadline && (
+                  <div className="mb-4 flex items-center justify-between text-xs text-gray-500">
+                    <span>Deadline</span>
+                    <span className={`font-medium ${new Date(event.deadline) < new Date() ? 'text-red-600' : 'text-gray-700'}`}>
+                      {new Date(event.deadline).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2 border-t border-gray-100 pt-4">
                   <Link
@@ -1754,11 +2031,20 @@ export function EventsPage() {
                   {!event.is_settled && (
                     <button
                       type="button"
-                      onClick={() => handleSettleEvent(event.id, event.name)}
+                      onClick={() => setSettleModalEvent(event)}
                       disabled={settlingId === event.id}
                       className="flex-1 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50 cursor-pointer"
                     >
                       {settlingId === event.id ? 'Settling...' : 'Settle'}
+                    </button>
+                  )}
+                  {!event.is_settled && (
+                    <button
+                      type="button"
+                      onClick={() => { setBulkPenaltyEvent(event); setBulkPenaltyAmount(''); setBulkPenaltyReason(''); }}
+                      className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 transition hover:bg-amber-100 cursor-pointer"
+                    >
+                      Bulk Penalty
                     </button>
                   )}
                   <button
@@ -1773,6 +2059,65 @@ export function EventsPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Settle Confirmation Modal */}
+      {settleModalEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Settle Event</h3>
+            <p className="mt-1 text-sm text-gray-600">Are you sure you want to settle <strong>{settleModalEvent.name}</strong>?</p>
+            {(() => {
+              const fin = eventFinancials[settleModalEvent.id] || { income: 0, expenses: 0 };
+              const net = fin.income - fin.expenses;
+              return (
+                <div className="mt-4 rounded-xl bg-gray-50 p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Income</span>
+                    <span className="font-semibold text-green-600">{formatCurrency(fin.income)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Total Expenses</span>
+                    <span className="font-semibold text-red-600">{formatCurrency(fin.expenses)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-200 pt-2 text-sm">
+                    <span className="font-medium text-gray-900">Net Balance</span>
+                    <span className={`font-bold ${net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{net >= 0 ? '+' : ''}{formatCurrency(net)}</span>
+                  </div>
+                </div>
+              );
+            })()}
+            <p className="mt-3 text-xs text-gray-500">This action will mark the event as settled and record the final balance. This cannot be undone.</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setSettleModalEvent(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => handleSettleEvent(settleModalEvent.id)} disabled={settlingId === settleModalEvent.id} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50 cursor-pointer">
+                {settlingId === settleModalEvent.id ? 'Settling...' : 'Confirm Settle'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Penalty Modal */}
+      {bulkPenaltyEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900">Bulk Penalty — {bulkPenaltyEvent.name}</h3>
+            <p className="mt-1 text-sm text-gray-600">Apply a penalty to all members with active contributions in this event.</p>
+            <div className="mt-4 space-y-4">
+              <Field label="Penalty Reason">
+                <input value={bulkPenaltyReason} onChange={(e) => setBulkPenaltyReason(e.target.value)} className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="e.g. Late event attendance" />
+              </Field>
+              <Field label="Amount per Member (₦)">
+                <input value={bulkPenaltyAmount} onChange={(e) => setBulkPenaltyAmount(e.target.value)} type="number" min="0" step="0.01" className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm outline-none" placeholder="0.00" required />
+              </Field>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setBulkPenaltyEvent(null)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 cursor-pointer">Cancel</button>
+              <button type="button" onClick={handleBulkPenalty} disabled={!bulkPenaltyAmount || Number(bulkPenaltyAmount) <= 0} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 cursor-pointer">Apply Penalty</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -59,7 +59,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 flex items-center justify-center p-4 md:p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 flex items-center justify-center p-4 md:p-6 overflow-y-auto">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-zinc-100 p-6 sm:p-10">
         
         {/* Header Alignment */}

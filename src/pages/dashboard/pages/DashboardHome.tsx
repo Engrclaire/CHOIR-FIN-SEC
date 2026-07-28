@@ -5,7 +5,9 @@ import {
   ArrowUpRight,
   Banknote,
   CalendarDays,
+  Eye,
   LoaderCircle,
+  Plus,
   Users,
   Wallet,
 } from 'lucide-react';
@@ -88,6 +90,8 @@ interface EventPerformance {
   expenses: number;
   net: number;
   status: string;
+  is_settled: boolean | null;
+  deadline?: string | null;
 }
 
 interface StatCardProps {
@@ -312,6 +316,8 @@ export default function DashboardHome() {
             expenses: exp,
             net,
             status: net >= 0 ? 'Profit' : 'Loss',
+            is_settled: event.is_settled,
+            deadline: (event as any).deadline ?? null,
           };
         });
 
@@ -355,7 +361,7 @@ export default function DashboardHome() {
 
   return (
     <div className="p-8">
-      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
           <p className="mt-1 text-gray-600">
@@ -364,12 +370,20 @@ export default function DashboardHome() {
             {activeFinancialYearId ? ` · FY ${activeFinancialYearId}` : ''}
           </p>
         </div>
-        <Link
-          to="/dashboard/transactions?action=record"
-          className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
-        >
-          Record Transaction
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/dashboard/events"
+            className="inline-flex items-center justify-center gap-2 rounded-md border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+          >
+            <Plus className="h-4 w-4" /> Create Event
+          </Link>
+          <Link
+            to="/dashboard/transactions?action=record"
+            className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white transition hover:bg-gray-800"
+          >
+            Record Transaction
+          </Link>
+        </div>
       </div>
 
       {errorMessage && (
@@ -425,7 +439,12 @@ export default function DashboardHome() {
         {/* Event Performance */}
         <div className="rounded-lg border border-gray-200 bg-white">
           <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-            <h2 className="font-semibold text-gray-900">Event Performance</h2>
+            <div>
+              <h2 className="font-semibold text-gray-900">Event Performance</h2>
+              <p className="mt-0.5 text-sm text-gray-500">
+                {eventPerformance.filter((e) => !e.is_settled).length} active, {eventPerformance.filter((e) => e.is_settled).length} settled
+              </p>
+            </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50">
               <CalendarDays className="h-5 w-5 text-blue-600" />
             </div>
@@ -434,35 +453,53 @@ export default function DashboardHome() {
             {isLoading ? (
               <div className="px-6 py-6 text-sm text-gray-500">Loading events...</div>
             ) : eventPerformance.length ? (
-              eventPerformance.map((event) => (
-                <div key={event.id} className="px-6 py-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <p className="font-medium text-gray-900">{event.name}</p>
-                    <StatusBadge status={event.net >= 0 ? 'Profit' : 'Loss'} />
+              <>
+                {eventPerformance.filter((e) => !e.is_settled).slice(0, 3).map((event) => (
+                  <div key={event.id} className="px-6 py-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{event.name}</p>
+                        <span className="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700">Active</span>
+                      </div>
+                      <StatusBadge status={event.net >= 0 ? 'Profit' : 'Loss'} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500">Income</p>
+                        <p className="font-semibold text-green-600">{formatCurrency(event.income)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Expenses</p>
+                        <p className="font-semibold text-red-600">{formatCurrency(event.expenses)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Net</p>
+                        <p className={`font-semibold ${event.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {event.net >= 0 ? '+' : ''}
+                          {formatCurrency(event.net)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Income</p>
-                      <p className="font-semibold text-green-600">{formatCurrency(event.income)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Expenses</p>
-                      <p className="font-semibold text-red-600">{formatCurrency(event.expenses)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Net</p>
-                      <p className={`font-semibold ${event.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {event.net >= 0 ? '+' : ''}
-                        {formatCurrency(event.net)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
+                ))}
+                {eventPerformance.filter((e) => !e.is_settled).length === 0 && (
+                  <div className="px-6 py-4 text-sm text-gray-500">No active events.</div>
+                )}
+              </>
             ) : (
               <div className="px-6 py-6 text-sm text-gray-500">No visible events for this role.</div>
             )}
           </div>
+          {eventPerformance.length > 0 && (
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-3">
+              <Link
+                to="/dashboard/events"
+                className="flex w-full items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                <Eye className="h-4 w-4" /> View All Events
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 

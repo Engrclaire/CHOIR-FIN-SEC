@@ -32,12 +32,46 @@ type SubmenuItem = {
   primary?: boolean;
 };
 
-const mainItems = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight, hasSubmenu: true },
-  { name: 'Members', href: '/dashboard/members', icon: Users },
-  { name: 'Events', href: '/dashboard/events', icon: CalendarDays },
-  { name: 'Reports', href: '/dashboard/reports', icon: FileText, hasSubmenu: true },
+type NavItem = {
+  name: string;
+  href: string;
+  icon: typeof Receipt;
+  hasSubmenu?: boolean;
+};
+
+type MenuSection = {
+  label: string;
+  items: NavItem[];
+};
+
+const menuSections: MenuSection[] = [
+  {
+    label: 'Overview',
+    items: [
+      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    label: 'Financial',
+    items: [
+      { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight, hasSubmenu: true },
+      { name: 'Levies', href: '/dashboard/levies', icon: FileText },
+      { name: 'Contributions', href: '/dashboard/contributions', icon: HandCoins },
+    ],
+  },
+  {
+    label: 'People & Events',
+    items: [
+      { name: 'Members', href: '/dashboard/members', icon: Users },
+      { name: 'Events', href: '/dashboard/events', icon: CalendarDays },
+    ],
+  },
+  {
+    label: 'Insights',
+    items: [
+      { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, hasSubmenu: true },
+    ],
+  },
 ];
 
 const transactionItems: SubmenuItem[] = [
@@ -113,7 +147,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
   const openSubmenu = (
     event: MouseEvent<HTMLAnchorElement>,
-    item: (typeof mainItems)[number],
+    item: NavItem,
   ) => {
     if (!item.hasSubmenu) {
       onClose?.();
@@ -155,27 +189,34 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          {mainItems.map((item) => (
-            <NavLink
-              key={item.name}
-              to={item.href}
-              end={item.href === '/dashboard'}
-              onClick={(event) => openSubmenu(event, item)}
-              className={({ isActive }) =>
-                `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-600'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              <item.icon className="h-5 w-5" />
-              <span className="flex-1">{item.name}</span>
-              {item.hasSubmenu && (
-                <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-gray-600" />
-              )}
-            </NavLink>
+        <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+          {menuSections.map((section) => (
+            <div key={section.label}>
+              <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">{section.label}</p>
+              <div className="space-y-0.5">
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.name}
+                    to={item.href}
+                    end={item.href === '/dashboard'}
+                    onClick={(event) => openSubmenu(event, item)}
+                    className={({ isActive }) =>
+                      `group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-600'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`
+                    }
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="flex-1">{item.name}</span>
+                    {item.hasSubmenu && (
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-400 group-hover:text-gray-600" />
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 

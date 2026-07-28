@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -7,40 +6,34 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    // 1. Get the request body
-    const { email, name, role, resend } = await req.json();
+    // 1. Parse request body
+    const { email, name, role } = await req.json();
+    const cleanEmail = email?.trim().toLowerCase();
 
-    if (!email || !email.trim()) {
+    if (!cleanEmail) {
       return new Response(
         JSON.stringify({ error: "Email is required." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 2. Create a Supabase admin client with the service_role key
+    // 2. Instantiate Supabase Admin Client
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // 3. Check if user already exists
-    const { data: existing } = await supabaseAdmin
-      .from("users")
-      .select("status")
-      .eq("email", email.trim())
-      .single();
-
-    // 4. Attempt to send invite — Supabase ignores duplicates and re-sends
+    // 3. Invite or re-invite user via Auth Admin API
     const { data: inviteData, error: inviteError } =
-      await supabaseAdmin.auth.admin.inviteUserByEmail(email.trim(), {
+      await supabaseAdmin.auth.admin.inviteUserByEmail(cleanEmail, {
         data: {
           full_name: name || "",
           role: role || "member",
@@ -49,31 +42,53 @@ serve(async (req: Request) => {
       });
 
     if (inviteError) {
-      // If user already has a pending invite, Supabase returns an error.
-      // We handle it gracefully: still update the DB and return success.
-      console.warn("Invite API warning (may already exist):", inviteError.message);
+      console.warn("Auth Invite warning:", inviteError.message);
+      // Optional: Check if error is something other than user already exists
     }
 
-    // 5. Upsert into users table
-    const { error: dbError } = await supabaseAdmin.from("users").upsert(
-      {
+    // 4. Retrieve user ID from Auth (either newly invited or existing)
+    let authUserId = inviteData?.user?.id;
+
+    if (!authUserId) {
+      // If inviteUserByEmail didn't return a user (e.g. user already exists), fetch their Auth ID
+      const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+      const match = existingUser?.users?.find(u => u.email === cleanEmail);
+      if (match) authUserId = match.id;
+    }
+
+    // 5. Check if user already exists in public.users
+    const { data: existingPublicUser } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .eq("email", cleanEmail)
+      .maybeSingle();
+
+    if (existingPublicUser) {
+      // Update existing record
+      await supabaseAdmin
+        .from("users")
+        .update({
+          name: name || "",
+          role: role || "member",
+          status: "invited",
+        })
+        .eq("email", cleanEmail);
+    } else {
+      // Insert new record (linking Auth ID if available)
+      await supabaseAdmin.from("users").insert({
+        ...(authUserId ? { id: authUserId } : {}),
         name: name || "",
-        email: email.trim(),
+        email: cleanEmail,
         role: role || "member",
         status: "invited",
-      },
-      { onConflict: "email" }
-    );
-
-    if (dbError) {
-      console.warn("users insert warning:", dbError.message);
+      });
     }
 
-    // 6. Return success
+    // 6. Return success response
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Invitation sent to ${email}`,
+        message: `Invitation sent to ${cleanEmail}`,
         user: inviteData?.user ?? null,
       }),
       {

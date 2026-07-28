@@ -139,22 +139,22 @@ const Landing: React.FC = () => {
                 : 'bg-blue-50 text-blue-600 border-blue-200'
             }`}>
               <Sparkles size={12} className={isDarkMode ? 'text-violet-400' : 'text-blue-500'} />
-              The Premium FinSec Suite
+              Built for Choir Financial Teams
             </div>
             
             <h1 className={`text-4xl md:text-5xl font-black leading-[1.1] tracking-tight ${
               isDarkMode ? 'text-white' : 'text-black'
             }`}>
-              Empowering Choir Leadership with{' '}
+              Track Every Naira in Your{' '}
               <span className={isDarkMode ? 'bg-gradient-to-r from-indigo-400 via-purple-400 to-violet-400 bg-clip-text text-transparent' : 'text-blue-600'}>
-                Financial Clarity
+                Choir's Treasury
               </span>
             </h1>
             
             <p className={`mt-6 text-base leading-relaxed max-w-xl mx-auto lg:mx-0 ${
               isDarkMode ? 'text-slate-400' : 'text-slate-600'
             }`}>
-              Engineered for absolute efficiency, transparency, and internal accountability. Track baseline channels, isolate dynamic committee budgets, and manage member configurations with confidence.
+              From weekly levies and event contributions to penalties and committee budgets — manage your choir's finances with clarity. See who has paid, who owes, and where every kobo goes.
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
@@ -166,8 +166,18 @@ const Landing: React.FC = () => {
                     : 'bg-[#114ada] hover:bg-blue-700 text-white shadow-blue-600/20'
                 }`}
               >
-                Launch App Ledger
+                Start Managing Finances
                 <ArrowRight size={16} />
+              </Link>
+              <Link
+                to="/login"
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-bold transition-all duration-200 border ${
+                  isDarkMode 
+                    ? 'border-slate-700 text-slate-300 hover:bg-slate-800/50' 
+                    : 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                }`}
+              >
+                Sign In
               </Link>
             </div>
           </div>
@@ -206,9 +216,9 @@ const Landing: React.FC = () => {
               </div>
               <h3 className={`text-lg font-bold transition-colors ${
                 isDarkMode ? 'text-slate-100 group-hover:text-indigo-300' : 'text-slate-950'
-              }`}>Immutable Baselines</h3>
+              }`}>Levy & Contribution Tracking</h3>
               <p className={`text-sm mt-3 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Configure closing and opening balances across cash and bank channels. Establish unified launch points for audit-ready transaction logging.
+                Record levies, donations, and event contributions in real time. See who has paid, who is owing, and generate reports at a glance.
               </p>
             </div>
 
@@ -227,9 +237,9 @@ const Landing: React.FC = () => {
               </div>
               <h3 className={`text-lg font-bold transition-colors ${
                 isDarkMode ? 'text-slate-100 group-hover:text-indigo-300' : 'text-slate-950'
-              }`}>Member Rosters</h3>
+              }`}>Member Debt Management</h3>
               <p className={`text-sm mt-3 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Stage your active profiles manually or configuration seeds via bulk data payloads. Track roles from Soprano to administrative chairs.
+                Track outstanding debts per member, apply penalties, send reminders, and mark debts as cleared — all from one member profile.
               </p>
             </div>
 
@@ -248,9 +258,9 @@ const Landing: React.FC = () => {
               </div>
               <h3 className={`text-lg font-bold transition-colors ${
                 isDarkMode ? 'text-slate-100 group-hover:text-indigo-300' : 'text-slate-950'
-              }`}>Isolated Event Vaults</h3>
+              }`}>Event Budget Management</h3>
               <p className={`text-sm mt-3 leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Empower dynamic Committee Leads to independently organize structural event funding vectors without disrupting main register balances.
+                Create events, assign committee leads, track income vs expenses per event, and settle events with a single click when budgets are complete.
               </p>
             </div>
 
@@ -279,12 +289,12 @@ const Landing: React.FC = () => {
             <div className="flex-1 space-y-2 text-center md:text-left relative z-10">
               {isDarkMode ? null : <span className="text-4xl text-cyan-300 font-serif leading-none block">“</span>}
               <p className={`text-base md:text-lg font-medium leading-relaxed italic ${isDarkMode ? 'text-slate-200' : 'text-slate-100'}`}>
-                “This architecture completely transformed our ministry tracking framework, delivering institutional transparency in single audit cycles.”
+                "Before this tool, we were writing everything in notebooks. Now every member can see their balance, every event is accounted for, and settlement takes minutes, not hours."
               </p>
               <div className={`text-[11px] font-bold tracking-wider uppercase pt-1 ${
                 isDarkMode ? 'bg-gradient-to-r from-indigo-400 to-violet-400 bg-clip-text text-transparent' : 'text-cyan-300'
               }`}>
-                — Financial Council & Directorate Board
+                — Choir Financial Secretary
               </div>
             </div>
           </div>
@@ -296,9 +306,9 @@ const Landing: React.FC = () => {
         }`}>
           <div className="max-w-7xl mx-auto px-6">
             <div className="max-w-2xl">
-              <h3 className={`text-2xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>Built Specifically for Ministry Structuring</h3>
+              <h3 className={`text-2xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-950'}`}>Built for Your Choir's Financial Needs</h3>
               <p className={`mt-2 text-sm leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                An all-in-one framework built exclusively around the unique structural accounting requirements of community and parish choir boards.
+                Everything a choir financial team needs — from tracking weekly collections to managing multi-committee event budgets and penalty records.
               </p>
             </div>
 
@@ -306,30 +316,30 @@ const Landing: React.FC = () => {
               <div className="space-y-3">
                 <div className={`flex items-center gap-2 text-sm font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-950'}`}>
                   <CheckCircle2 size={16} className="text-indigo-400" />
-                  Rapid Onboarding Setup
+                  Quick Setup
                 </div>
                 <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Get foundational tracking active within minutes using streamlined account configurations and automated setup wizards.
+                  Create your choir's account, add members, and start recording transactions in under 5 minutes. No training required.
                 </p>
               </div>
 
               <div className="space-y-3">
                 <div className={`flex items-center gap-2 text-sm font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-950'}`}>
                   <ShieldAlert size={16} className={isDarkMode ? 'text-violet-400' : 'text-blue-500'} />
-                  Role Protection Rules
+                  Role-Based Access
                 </div>
                 <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Granular administrative role assignments safeguard database entries. Clear audit environments log internal user operations.
+                  Admins see everything. Financial secretaries manage transactions. Committee leads only see their events. Everyone stays accountable.
                 </p>
               </div>
 
               <div className="space-y-3">
                 <div className={`flex items-center gap-2 text-sm font-bold ${isDarkMode ? 'text-slate-200' : 'text-slate-950'}`}>
                   <Users size={16} className="text-indigo-400" />
-                  Highly Collaborative
+                  Live Dashboard
                 </div>
                 <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Seamlessly sync system states between executive directors, financial secretaries, audit partners, and choir committees.
+                  See real-time balances, top debtors, event performance, and recent transactions — all on one dashboard when you log in.
                 </p>
               </div>
             </div>
