@@ -36,13 +36,13 @@ interface HeaderProps {
 interface Transaction {
   id: string;
   date: string;
+  created_at?: string;
   description: string;
   source?: string;
   category: string;
   mode: 'Transfer' | 'Cash';
   type: 'income' | 'expense';
   amount: number;
-  amountPaid?: number;
   status?: string;
 }
 
@@ -212,11 +212,15 @@ function TransactionTable({ rows }: { rows: Transaction[] }) {
           </thead>
           <tbody className="divide-y divide-gray-200">
             {rows.map((transaction) => {
-              const displayAmount = transaction.type === 'income' ? transaction.amountPaid || 0 : transaction.amount || 0;
+              const displayAmount = transaction.amount || 0;
+              const displayDate = transaction.date
+                || (transaction.created_at
+                  ? new Date(transaction.created_at).toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '');
 
               return (
                 <tr key={transaction.id} className="hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{transaction.date}</td>
+                  <td className="whitespace-nowrap px-6 py-4 text-sm text-gray-900">{displayDate}</td>
                   <td className="px-6 py-4 text-sm text-gray-900">
                     <p className="font-medium">{transaction.description}</p>
                     {transaction.source && <p className="mt-0.5 text-xs text-gray-500">{transaction.source}</p>}
@@ -228,7 +232,7 @@ function TransactionTable({ rows }: { rows: Transaction[] }) {
                     {formatCurrency(displayAmount)}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4">
-                    {transaction.status ? <StatusBadge status={transaction.status} /> : '-'}
+                    <StatusBadge status={transaction.status || 'Completed'} />
                   </td>
                 </tr>
               );
@@ -301,6 +305,8 @@ function RecordTransactionPanel({ onClose, onSaveSuccess }: { onClose: () => voi
         event_id: formData.event_id || null,
         financial_year_id: yearData?.id ?? null,
         recorded_by: user?.id ?? null,
+        date: new Date().toISOString().split('T')[0],
+        status: 'Completed',
       }]);
 
       if (insertError) throw insertError;
@@ -541,14 +547,14 @@ export function DashboardHome() {
     fetchDashboardData();
   }, []);
 
-  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + (t.amountPaid || 0), 0);
+  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalExpenses = transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
   const cashBalance = transactions
     .filter((t) => t.mode === 'Cash')
-    .reduce((sum, t) => sum + (t.type === 'income' ? (t.amountPaid || 0) : -(t.amount || 0)), 0);
+    .reduce((sum, t) => sum + (t.type === 'income' ? (t.amount || 0) : -(t.amount || 0)), 0);
   const bankBalance = transactions
     .filter((t) => t.mode === 'Transfer')
-    .reduce((sum, t) => sum + (t.type === 'income' ? (t.amountPaid || 0) : -(t.amount || 0)), 0);
+    .reduce((sum, t) => sum + (t.type === 'income' ? (t.amount || 0) : -(t.amount || 0)), 0);
   const totalDebtorsSum = debtors.reduce((sum: number, d: any) => sum + (d.amount || 0), 0);
 
   return (
@@ -652,20 +658,27 @@ export function TransactionsPage() {
   const [filter, setFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchTransactions = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      setError(null);
+      const { data, error: fetchError } = await supabase
         .from('transactions')
         .select('*')
         .order('created_at', { ascending: false });
-      if (error) throw error;
+      if (fetchError) throw fetchError;
       setTransactions((data ?? []).map((t: any) => ({
         ...t,
         mode: t.mode_of_payment === 'cash' ? 'Cash' : 'Transfer',
       })));
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('Error fetching transactions:', err);
+      setError(err?.message || 'Failed to load transactions.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -674,7 +687,7 @@ export function TransactionsPage() {
   }, []);
 
   const showRecordForm = searchParams.get('action') === 'record';
-  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + (t.amountPaid || 0), 0);
+  const totalIncome = transactions.filter((t) => t.type === 'income').reduce((sum, t) => sum + (t.amount || 0), 0);
   const totalExpenses = transactions.filter((t) => t.type === 'expense').reduce((sum, t) => sum + (t.amount || 0), 0);
 
   const visibleTransactions = transactions.filter((t) => {
@@ -731,7 +744,14 @@ export function TransactionsPage() {
           </div>
         </div>
       </div>
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      )}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-500">Loading transactions...</div>
+      ) : (
       <TransactionTable rows={visibleTransactions} />
+      )}
     </div>
   );
 }
@@ -746,7 +766,7 @@ export function IncomePage() {
     })();
   }, []);
 
-  const totalIncome = transactions.reduce((sum, t) => sum + (t.amountPaid || 0), 0);
+  const totalIncome = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
   return (
     <div className="p-8">
@@ -802,20 +822,32 @@ export function ExpensesPage() {
 
 export function LeviesPage() {
   const [levies, setLevies] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from('levies').select('*').order('created_at', { ascending: false });
-      if (!error) setLevies((data ?? []).map((l: any) => ({
-        ...l,
-        name: l.title,
-        totalCollected: Number(l.total_collected || 0),
-        totalExpected: Number(l.total_expected || 0),
-        amountPerMember: Number(l.amount_per_member || 0),
-        membersPaid: Number(l.members_paid || 0),
-        totalMembers: Number(l.total_members || 0),
-        deadline: l.deadline || '',
-      })));
+      try {
+        setLoading(true);
+        setError(null);
+        const { data, error: fetchError } = await supabase.from('levies').select('*').order('created_at', { ascending: false });
+        if (fetchError) throw fetchError;
+        setLevies((data ?? []).map((l: any) => ({
+          ...l,
+          name: l.title,
+          totalCollected: Number(l.total_collected || 0),
+          totalExpected: Number(l.total_expected || 0),
+          amountPerMember: Number(l.amount_per_member || 0),
+          membersPaid: Number(l.members_paid || 0),
+          totalMembers: Number(l.total_members || 0),
+          deadline: l.deadline || '',
+        })));
+      } catch (err: any) {
+        console.error('Error fetching levies:', err);
+        setError(err?.message || 'Failed to load levies.');
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -831,6 +863,12 @@ export function LeviesPage() {
         <StatCard title="Outstanding" amount={totalExpected - totalCollected} icon={FileText} color="bg-amber-500" />
       </div>
       <SearchPanel placeholder="Search levies..." />
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      )}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-500">Loading levies...</div>
+      ) : (
       <div className="space-y-4">
         {levies.map((levy: any) => {
           const progress = levy.totalExpected ? Math.round((levy.totalCollected / levy.totalExpected) * 100) : 0;
@@ -869,17 +907,30 @@ export function LeviesPage() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
 
 export function ContributionsPage() {
   const [contributions, setContributions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase.from('contributions').select('*').order('created_at', { ascending: false });
-      if (!error) setContributions(data ?? []);
+      try {
+        setLoading(true);
+        setError(null);
+        const { data, error: fetchError } = await supabase.from('contributions').select('*').order('created_at', { ascending: false });
+        if (fetchError) throw fetchError;
+        setContributions(data ?? []);
+      } catch (err: any) {
+        console.error('Error fetching contributions:', err);
+        setError(err?.message || 'Failed to load contributions.');
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -897,6 +948,12 @@ export function ContributionsPage() {
         <StatCard title="General Contributions" amount={total - eventTotal} icon={HandCoins} color="bg-green-600" />
       </div>
       <SearchPanel placeholder="Search contributions..." />
+      {error && (
+        <div className="mb-6 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+      )}
+      {loading ? (
+        <div className="py-12 text-center text-sm text-gray-500">Loading contributions...</div>
+      ) : (
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px]">
@@ -928,6 +985,7 @@ export function ContributionsPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -1262,7 +1320,6 @@ export function MemberDetailsPage() {
           mode: t.mode_of_payment || 'Transfer',
           type: t.type || 'income',
           amount: t.amount || 0,
-          amountPaid: t.amount_paid || t.amount || 0,
           status: t.status,
         })));
       } catch (err) {
@@ -1499,7 +1556,7 @@ export function MemberDetailsPage() {
                     </div>
                     <div className="text-right">
                       <p className={`font-semibold ${t.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                        {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amountPaid || t.amount)}
+                        {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                       </p>
                       {t.status && <StatusBadge status={t.status} />}
                     </div>
