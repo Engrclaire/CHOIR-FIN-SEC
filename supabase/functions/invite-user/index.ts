@@ -14,8 +14,9 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Parse request body
-    const { email, name, role } = await req.json();
+    const { email, name, role, siteUrl } = await req.json();
     const cleanEmail = email?.trim().toLowerCase();
+    const redirectBase = siteUrl || Deno.env.get("SITE_URL") || "https://choir-fin-sec-two.vercel.app";
 
     if (!cleanEmail) {
       return new Response(
@@ -38,7 +39,7 @@ Deno.serve(async (req: Request) => {
           full_name: name || "",
           role: role || "member",
         },
-        redirectTo: "https://choir-fin-sec-two.vercel.app/dashboard",
+        redirectTo: `${redirectBase}/dashboard`,
       });
 
     if (inviteError) {
@@ -56,9 +57,9 @@ Deno.serve(async (req: Request) => {
       if (match) authUserId = match.id;
     }
 
-    // 5. Check if user already exists in public.users
+    // 5. Check if user already exists in public.app_users
     const { data: existingPublicUser } = await supabaseAdmin
-      .from("users")
+      .from("app_users")
       .select("id")
       .eq("email", cleanEmail)
       .maybeSingle();
@@ -66,7 +67,7 @@ Deno.serve(async (req: Request) => {
     if (existingPublicUser) {
       // Update existing record
       await supabaseAdmin
-        .from("users")
+        .from("app_users")
         .update({
           name: name || "",
           role: role || "member",
@@ -75,7 +76,7 @@ Deno.serve(async (req: Request) => {
         .eq("email", cleanEmail);
     } else {
       // Insert new record (linking Auth ID if available)
-      await supabaseAdmin.from("users").insert({
+      await supabaseAdmin.from("app_users").insert({
         ...(authUserId ? { id: authUserId } : {}),
         name: name || "",
         email: cleanEmail,

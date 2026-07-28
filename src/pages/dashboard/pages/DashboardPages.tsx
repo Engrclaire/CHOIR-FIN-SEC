@@ -1022,13 +1022,21 @@ export function MembersPage() {
   const fetchMembers = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
+      const [{ data: memberData, error: memberError }, { data: txnData }] = await Promise.all([
+        supabase.from('members').select('*').order('created_at', { ascending: false }),
+        supabase.from('transactions').select('member_id, type, amount'),
+      ]);
+      if (memberError) throw memberError;
+
+      const txnByMember: Record<string, number> = {};
+      (txnData as any[] || []).forEach((t: any) => {
+        if (t.type === 'income' && t.member_id) {
+          txnByMember[t.member_id] = (txnByMember[t.member_id] || 0) + Number(t.amount || 0);
+        }
+      });
+
       setMembers(
-        (data || []).map((m: any) => ({
+        (memberData || []).map((m: any) => ({
           id: m.id,
           firstName: m.first_name,
           lastName: m.last_name,
@@ -1038,7 +1046,7 @@ export function MembersPage() {
           debtStatus: m.debt_status || 'clear',
           outstandingDebt: m.outstanding_debt || 0,
           penalties: m.penalties || 0,
-          totalPaid: m.total_levies + m.total_contributions || 0,
+          totalPaid: txnByMember[m.id] ?? (m.total_levies || 0) + (m.total_contributions || 0),
           totalLevies: m.total_levies || 0,
           contributions: m.total_contributions || 0,
         }))
@@ -1297,6 +1305,10 @@ export function MemberDetailsPage() {
         ]);
         if (mErr) throw mErr;
         if (mData) {
+          const memberTxns = (tData as any[] || []);
+          const computedTotalPaid = memberTxns
+            .filter((t: any) => t.type === 'income')
+            .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
           setMember({
             id: mData.id,
             firstName: mData.first_name,
@@ -1307,7 +1319,7 @@ export function MemberDetailsPage() {
             debtStatus: mData.debt_status || 'clear',
             outstandingDebt: mData.outstanding_debt || 0,
             penalties: mData.penalties || 0,
-            totalPaid: (mData.total_levies || 0) + (mData.total_contributions || 0),
+            totalPaid: computedTotalPaid,
             totalLevies: mData.total_levies || 0,
             contributions: mData.total_contributions || 0,
           });
@@ -1353,8 +1365,15 @@ export function MemberDetailsPage() {
       setPaymentAmount('');
       setPaymentDesc('');
       setPaymentMode('cash');
-      const { data: mData } = await supabase.from('members').select('*').eq('id', id).maybeSingle();
+      const [{ data: mData }, { data: freshTxns }] = await Promise.all([
+        supabase.from('members').select('*').eq('id', id).maybeSingle(),
+        supabase.from('transactions').select('*').eq('member_id', id).order('created_at', { ascending: false }),
+      ]);
       if (mData) {
+        const memberTxns = (freshTxns as any[] || []);
+        const computedTotalPaid = memberTxns
+          .filter((t: any) => t.type === 'income')
+          .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
         setMember({
           id: mData.id,
           firstName: mData.first_name,
@@ -1365,10 +1384,20 @@ export function MemberDetailsPage() {
           debtStatus: mData.debt_status || 'clear',
           outstandingDebt: mData.outstanding_debt || 0,
           penalties: mData.penalties || 0,
-          totalPaid: (mData.total_levies || 0) + (mData.total_contributions || 0),
+          totalPaid: computedTotalPaid,
           totalLevies: mData.total_levies || 0,
           contributions: mData.total_contributions || 0,
         });
+        setTransactions(memberTxns.map((t: any) => ({
+          id: t.id,
+          date: t.date || t.created_at?.slice(0, 10) || '',
+          description: t.description || '',
+          category: t.category || '',
+          mode: t.mode_of_payment || 'Transfer',
+          type: t.type || 'income',
+          amount: t.amount || 0,
+          status: t.status,
+        })));
       }
     } catch (err) {
       console.error('Error recording payment:', err);
@@ -1405,8 +1434,15 @@ export function MemberDetailsPage() {
       setShowPenaltyModal(false);
       setPenaltyAmount('');
       setPenaltyDesc('');
-      const { data: mData } = await supabase.from('members').select('*').eq('id', id).maybeSingle();
+      const [{ data: mData }, { data: freshTxns }] = await Promise.all([
+        supabase.from('members').select('*').eq('id', id).maybeSingle(),
+        supabase.from('transactions').select('*').eq('member_id', id).order('created_at', { ascending: false }),
+      ]);
       if (mData) {
+        const memberTxns = (freshTxns as any[] || []);
+        const computedTotalPaid = memberTxns
+          .filter((t: any) => t.type === 'income')
+          .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
         setMember({
           id: mData.id,
           firstName: mData.first_name,
@@ -1417,10 +1453,20 @@ export function MemberDetailsPage() {
           debtStatus: mData.debt_status || 'clear',
           outstandingDebt: mData.outstanding_debt || 0,
           penalties: mData.penalties || 0,
-          totalPaid: (mData.total_levies || 0) + (mData.total_contributions || 0),
+          totalPaid: computedTotalPaid,
           totalLevies: mData.total_levies || 0,
           contributions: mData.total_contributions || 0,
         });
+        setTransactions(memberTxns.map((t: any) => ({
+          id: t.id,
+          date: t.date || t.created_at?.slice(0, 10) || '',
+          description: t.description || '',
+          category: t.category || '',
+          mode: t.mode_of_payment || 'Transfer',
+          type: t.type || 'income',
+          amount: t.amount || 0,
+          status: t.status,
+        })));
       }
     } catch (err) {
       console.error('Error adding penalty:', err);
@@ -1507,7 +1553,7 @@ export function MemberDetailsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600">Payment Rate</p>
-                  <p className="mt-1 text-2xl font-semibold text-gray-900">{totalPaid > 0 ? Math.round((totalPaid / (totalPaid + totalDebt)) * 100) : 0}%</p>
+                  <p className="mt-1 text-2xl font-semibold text-gray-900">{totalPaid + totalDebt > 0 ? Math.round((totalPaid / (totalPaid + totalDebt)) * 100) : 0}%</p>
                   <p className="text-xs text-gray-500">On-time payments</p>
                 </div>
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100"><TrendingUp className="h-5 w-5 text-blue-600" /></div>
@@ -2774,7 +2820,7 @@ export function UserManagementPage() {
   const fetchUsers = async () => {
     try {
       const { data, error } = await supabase
-        .from('users')
+        .from('app_users')
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -2804,6 +2850,7 @@ export function UserManagementPage() {
           email: inviteForm.email.trim(),
           role: inviteForm.role,
           resend: true,
+          siteUrl: window.location.origin,
         },
       });
 
@@ -2838,7 +2885,7 @@ export function UserManagementPage() {
     if (!confirm(`Remove "${userName}" from the system? This cannot be undone.`)) return;
     setDeletingId(userId);
     try {
-      const { error } = await supabase.from('users').delete().eq('id', userId);
+      const { error } = await supabase.from('app_users').delete().eq('id', userId);
       if (error) throw error;
       fetchUsers();
     } catch (err) {
