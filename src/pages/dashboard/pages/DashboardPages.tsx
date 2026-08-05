@@ -2162,6 +2162,7 @@ export function MemberDetailsPage() {
 }
 
 export function EventsPage() {
+  const { profile } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
   const [eventFinancials, setEventFinancials] = useState<Record<string, { income: number; expenses: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -2193,9 +2194,21 @@ export function EventsPage() {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      setEvents(data ?? []);
+      let fetchedEvents = (data ?? []) as any[];
 
-      const fetchedEvents = data ?? [];
+      const isStaff = profile?.role === 'committee_lead' || profile?.role === 'fin_sec';
+      if (isStaff) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: assignments } = await supabase
+          .from('event_assignments')
+          .select('event_id')
+          .eq('user_id', user?.id ?? '');
+        const assignedIds = new Set((assignments ?? []).map((a: any) => a.event_id));
+        fetchedEvents = fetchedEvents.filter((e: any) => assignedIds.has(e.id));
+      }
+
+      setEvents(fetchedEvents);
+
       if (fetchedEvents.length > 0) {
         const eventIds = fetchedEvents.map((e: any) => e.id);
         const { data: txnData } = await supabase
@@ -2977,13 +2990,15 @@ export function EventDetailsPage() {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleRemoveStaff(staff.id)}
-                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
-                  >
-                    Remove
-                  </button>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveStaff(staff.id)}
+                      className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

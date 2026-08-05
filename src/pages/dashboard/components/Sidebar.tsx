@@ -147,9 +147,30 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
           ? { name: 'Committee Workspace', href: '/dashboard/committee-lead', icon: ShieldCheck }
           : null;
 
+  const blockedForCommitteeLead = new Set(['Levies', 'Contributions', 'Members']);
+  const blockedForMember = new Set([
+    'Transactions', 'Levies', 'Contributions', 'Members', 'Events', 'Reports',
+  ]);
+  const isAdmin = role === 'admin';
+  const isFinSec = role === 'fin_sec';
+  const isCommitteeLead = role === 'committee_lead';
+
+  const visibleSections: MenuSection[] = menuSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        if (isAdmin) return true;
+        if (isFinSec) return true;
+        if (isCommitteeLead) return !blockedForCommitteeLead.has(item.name);
+        if (role === 'member') return !blockedForMember.has(item.name);
+        return true;
+      }),
+    }))
+    .filter((section) => section.items.length > 0);
+
   const menuSectionsWithWorkspace: MenuSection[] = workspaceItem
-    ? [{ label: 'Overview', items: [{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }, workspaceItem] }, ...menuSections.slice(1)]
-    : menuSections;
+    ? [{ label: 'Overview', items: [{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }, workspaceItem] }, ...visibleSections]
+    : visibleSections;
 
   const [overview, setOverview] = useState({ income: 0, expenses: 0 });
   useEffect(() => {
@@ -238,29 +259,33 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-gray-200 p-3">
-          <NavLink
-            to="/dashboard/user-management"
-            className={({ isActive }) =>
-              `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-              }`
-            }
-          >
-            <UserCog className="h-5 w-5" />
-            <span>Users</span>
-          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/dashboard/user-management"
+              className={({ isActive }) =>
+                `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                }`
+              }
+            >
+              <UserCog className="h-5 w-5" />
+              <span>Users</span>
+            </NavLink>
+          )}
 
-          <NavLink
-            to="/dashboard/settings"
-            className={({ isActive }) =>
-              `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-              }`
-            }
-          >
-            <Settings className="h-5 w-5" />
-            <span>Settings</span>
-          </NavLink>
+          {isAdmin && (
+            <NavLink
+              to="/dashboard/settings"
+              className={({ isActive }) =>
+                `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
+                  isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
+                }`
+              }
+            >
+              <Settings className="h-5 w-5" />
+              <span>Settings</span>
+            </NavLink>
+          )}
 
           <button
             type="button"

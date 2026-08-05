@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import Login from './auth/Login';
 import Onboarding from './auth/onboarding/PremiumOnboarding';
 import Landing from './pages/Landing';
@@ -41,6 +42,21 @@ function DashboardIndex() {
   return <DashboardHome />;
 }
 
+function homeForRole(role?: string) {
+  if (role === 'admin') return '/dashboard/admin';
+  if (role === 'fin_sec') return '/dashboard/financial-secretary';
+  if (role === 'committee_lead') return '/dashboard/committee-lead';
+  return '/dashboard';
+}
+
+function RoleRoute({ roles, children }: { roles: string[]; children: ReactNode }) {
+  const { profile, loading } = useAuth();
+  if (loading) return <div className="p-8 text-sm text-gray-500">Loading workspace...</div>;
+  const role = profile?.role;
+  if (!role || !roles.includes(role)) return <Navigate to={homeForRole(role)} replace />;
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <Router>
@@ -57,23 +73,23 @@ function App() {
 
         <Route path="/dashboard" element={<DashboardLayout />}>
           <Route index element={<DashboardIndex />} />
-          <Route path="admin" element={<AdminDashboard />} />
-          <Route path="financial-secretary" element={<FinancialSecretaryDashboard />} />
-          <Route path="committee-lead" element={<CommitteeLeadDashboard />} />
-          <Route path="transactions" element={<TransactionsPage />} />
-          <Route path="income" element={<IncomePage />} />
-          <Route path="expenses" element={<ExpensesPage />} />
-          <Route path="levies" element={<LeviesPage />} />
-          <Route path="contributions" element={<ContributionsPage />} />
-          <Route path="members" element={<MembersPage />} />
-          <Route path="members/:id" element={<MemberDetailsPage />} />
-          <Route path="events" element={<EventsPage />} />
-          <Route path="events/:id" element={<EventDetailsPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="reports/financial-summary" element={<ReportsPage type="financial" />} />
-          <Route path="reports/member-activity" element={<ReportsPage type="members" />} />
-          <Route path="settings" element={<SettingsPage />} />
-          <Route path="user-management" element={<UserManagementPage />} />
+          <Route path="admin" element={<RoleRoute roles={['admin']}><AdminDashboard /></RoleRoute>} />
+          <Route path="financial-secretary" element={<RoleRoute roles={['fin_sec']}><FinancialSecretaryDashboard /></RoleRoute>} />
+          <Route path="committee-lead" element={<RoleRoute roles={['committee_lead']}><CommitteeLeadDashboard /></RoleRoute>} />
+          <Route path="transactions" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><TransactionsPage /></RoleRoute>} />
+          <Route path="income" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><IncomePage /></RoleRoute>} />
+          <Route path="expenses" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><ExpensesPage /></RoleRoute>} />
+          <Route path="levies" element={<RoleRoute roles={['admin', 'fin_sec']}><LeviesPage /></RoleRoute>} />
+          <Route path="contributions" element={<RoleRoute roles={['admin', 'fin_sec']}><ContributionsPage /></RoleRoute>} />
+          <Route path="members" element={<RoleRoute roles={['admin', 'fin_sec']}><MembersPage /></RoleRoute>} />
+          <Route path="members/:id" element={<RoleRoute roles={['admin', 'fin_sec']}><MemberDetailsPage /></RoleRoute>} />
+          <Route path="events" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><EventsPage /></RoleRoute>} />
+          <Route path="events/:id" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><EventDetailsPage /></RoleRoute>} />
+          <Route path="reports" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><ReportsPage /></RoleRoute>} />
+          <Route path="reports/financial-summary" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><ReportsPage type="financial" /></RoleRoute>} />
+          <Route path="reports/member-activity" element={<RoleRoute roles={['admin', 'fin_sec', 'committee_lead']}><ReportsPage type="members" /></RoleRoute>} />
+          <Route path="settings" element={<RoleRoute roles={['admin']}><SettingsPage /></RoleRoute>} />
+          <Route path="user-management" element={<RoleRoute roles={['admin']}><UserManagementPage /></RoleRoute>} />
         </Route>
         <Route path="/app/*" element={<Navigate to="/dashboard" replace />} />
 

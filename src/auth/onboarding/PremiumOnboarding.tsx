@@ -23,7 +23,7 @@ import { supabase } from '../../config/supabaseClient';
 import { useToast } from '../../contexts/useToast';
 import { useAuth } from '../../contexts/AuthContext';
 
-type Role = 'admin' | 'fin_sec' | 'committee_lead';
+type Role = 'admin' | 'fin_sec' | 'committee_lead' | 'member';
 type WizardStep = 1 | 2 | 3;
 
 interface AccountDetails {
@@ -84,6 +84,7 @@ const roleLabels: Record<Role, string> = {
   admin: 'Admin',
   fin_sec: 'Financial Secretary',
   committee_lead: 'Committee Lead',
+  member: 'Member',
 };
 
 const inputClass =
@@ -485,6 +486,11 @@ const PremiumOnboarding = () => {
   };
 
   const handleBack = () => {
+    if (currentStep === 3 && accountDetails.role === 'member') {
+      setCurrentStep(1);
+      setErrorMessage(null);
+      return;
+    }
     setCurrentStep((previous) => (previous > 1 ? ((previous - 1) as WizardStep) : previous));
     setErrorMessage(null);
   };
@@ -501,7 +507,11 @@ const PremiumOnboarding = () => {
       return;
     }
 
-    setCurrentStep((previous) => (previous < 3 ? ((previous + 1) as WizardStep) : previous));
+    if (currentStep === 1 && accountDetails.role === 'member') {
+      setCurrentStep(3);
+    } else {
+      setCurrentStep((previous) => (previous < 3 ? ((previous + 1) as WizardStep) : previous));
+    }
     setErrorMessage(null);
   };
 
@@ -583,31 +593,32 @@ const PremiumOnboarding = () => {
 
       if (profileError) throw profileError;
 
-      const currentYearString = new Date().getFullYear().toString();
-      const { data: yearData, error: yearLookupError } = await supabase
-        .from('financial_years')
-        .select('id')
-        .eq('year_label', currentYearString)
-        .maybeSingle();
-
-      if (yearLookupError) throw yearLookupError;
-
-      let activeYearId = yearData?.id;
-
-      if (!activeYearId) {
-        const { data: insertedYear, error: yearInsertError } = await supabase
+      if (accountDetails.role !== 'member') {
+        const currentYearString = new Date().getFullYear().toString();
+        const { data: yearData, error: yearLookupError } = await supabase
           .from('financial_years')
-          .insert({
-            year_label: currentYearString,
-            is_closed: false,
-            start_date: new Date().toISOString().split('T')[0],
-          })
           .select('id')
-          .single();
+          .eq('year_label', currentYearString)
+          .maybeSingle();
 
-        if (yearInsertError) throw yearInsertError;
-        activeYearId = insertedYear.id;
-      }
+        if (yearLookupError) throw yearLookupError;
+
+        let activeYearId = yearData?.id;
+
+        if (!activeYearId) {
+          const { data: insertedYear, error: yearInsertError } = await supabase
+            .from('financial_years')
+            .insert({
+              year_label: currentYearString,
+              is_closed: false,
+              start_date: new Date().toISOString().split('T')[0],
+            })
+            .select('id')
+            .single();
+
+          if (yearInsertError) throw yearInsertError;
+          activeYearId = insertedYear.id;
+        }
 
       const baselineRows = [
         {
@@ -654,6 +665,7 @@ const PremiumOnboarding = () => {
         const { error: memberError } = await supabase.from('members').insert(memberRows);
         if (memberError) throw memberError;
       }
+      }
 
       localStorage.setItem('completedOnboarding', 'true');
 
@@ -661,6 +673,7 @@ const PremiumOnboarding = () => {
         admin: '/dashboard/admin',
         fin_sec: '/dashboard/financial-secretary',
         committee_lead: '/dashboard/committee-lead',
+        member: '/dashboard',
       };
 
       if (data.session) {
