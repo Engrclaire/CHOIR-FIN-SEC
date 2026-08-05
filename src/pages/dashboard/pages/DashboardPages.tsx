@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../config/supabaseClient';
 import { useToast } from '../../../contexts/useToast';
+import { useAuth } from '../../../contexts/AuthContext';
 import {
   AlertCircle,
   AlertTriangle,
@@ -72,6 +73,26 @@ interface Member {
 
 function formatCurrency(amount: number): string {
   return `₦${(amount || 0).toLocaleString('en-NG')}`;
+}
+
+async function fetchMyAssignedEvents(): Promise<{ id: string; name: string }[]> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+    const { data } = await supabase
+      .from('event_assignments')
+      .select('event_id, events(id, name)')
+      .eq('user_id', user.id);
+    const rows = (data ?? []) as Array<{ event_id: string; events: Array<{ id: string; name: string | null }> | null }>;
+    return rows
+      .map((r) => {
+        const event = Array.isArray(r.events) ? r.events[0] : r.events;
+        return event ? { id: event.id, name: event.name || 'Unnamed event' } : null;
+      })
+      .filter((e): e is { id: string; name: string } => e !== null);
+  } catch {
+    return [];
+  }
 }
 
 function PrimaryButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
@@ -827,41 +848,167 @@ export function ExpensesPage() {
 
 export function LeviesPage() {
   const [levies, setLevies] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [assignedEvents, setAssignedEvents] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    title: '',
+    description: '',
+    amountPerMember: '',
+    totalMembers: '',
+    deadline: '',
+    eventId: '',
+  });
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentLevy, setPaymentLevy] = useState<any>(null);
+  const [paymentForm, setPaymentForm] = useState({ memberId: '', amount: '', note: '' });
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  const fetchLevies = async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error: fetchError } = await supabase.from('levies').select('*').order('created_at', { ascending: false });
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+    setLevies((data ?? []).map((l: any) => ({
+      ...l,
+      name: l.title,
+      totalCollected: Number(l.total_collected || 0),
+      totalExpected: Number(l.total_expected || 0),
+      amountPerMember: Number(l.amount_per_member || 0),
+      membersPaid: Number(l.members_paid || 0),
+      totalMembers: Number(l.total_members || 0),
+      deadline: l.deadline || '',
+    })));
+    setLoading(false);
+  };
 
   useEffect(() => {
     (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const { data, error: fetchError } = await supabase.from('levies').select('*').order('created_at', { ascending: false });
-        if (fetchError) throw fetchError;
-        setLevies((data ?? []).map((l: any) => ({
-          ...l,
-          name: l.title,
-          totalCollected: Number(l.total_collected || 0),
-          totalExpected: Number(l.total_expected || 0),
-          amountPerMember: Number(l.amount_per_member || 0),
-          membersPaid: Number(l.members_paid || 0),
-          totalMembers: Number(l.total_members || 0),
-          deadline: l.deadline || '',
-        })));
-      } catch (err: any) {
-        console.error('Error fetching levies:', err);
-        setError(err?.message || 'Failed to load levies.');
-      } finally {
-        setLoading(false);
-      }
+      await Promise.all([
+        fetchLevies(),
+        fetchMyAssignedEvents().then(setAssignedEvents),
+        supabase.from('members').select('id, first_name, last_name').order('created_at', { ascending: false }).then(({ data }) => setMembers(data ?? [])),
+      ]);
     })();
   }, []);
+
+  const openCreateModal = () => {
+    setCreateForm({
+      title: '',
+      description: '',
+      amountPerMember: '',
+      totalMembers: String(members.length || 0),
+      deadline: '',
+      eventId: '',
+    });
+    setCreateError(null);
+    setShowCreateModal(true);
+  };
+
+  const handleCreateLevy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateError(null);
+    if (!createForm.title.trim() || !Number(createForm.amountPerMember)) {
+      setCreateError('Levy title and amount per member are required.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const amount = Number(createForm.amountPerMember);
+      const totalMembers = Number(createForm.totalMembers || 0);
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const { error } = await supabase.from('levies').insert([{
+        title: createForm.title.trim(),
+        description: createForm.description.trim(),
+        amount_per_member: amount,
+        total_members: totalMembers,
+        total_expected: amount * totalMembers,
+        members_paid: 0,
+        total_collected: 0,
+        deadline: createForm.deadline || null,
+        event_id: createForm.eventId || null,
+        financial_year_id: yearData?.id ?? null,
+      }]);
+      if (error) throw error;
+      setShowCreateModal(false);
+      await fetchLevies();
+    } catch (err: any) {
+      setCreateError(err?.message || 'Failed to create levy.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openPaymentModal = (levy: any) => {
+    setPaymentLevy(levy);
+    setPaymentForm({ memberId: '', amount: String(levy.amountPerMember || ''), note: '' });
+    setPaymentError(null);
+    setShowPaymentModal(true);
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaymentError(null);
+    if (!paymentLevy || !paymentForm.memberId || !Number(paymentForm.amount)) {
+      setPaymentError('Select a member and enter an amount.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const member = members.find((m) => m.id === paymentForm.memberId);
+      const memberName = member ? `${member.first_name} ${member.last_name}`.trim() : 'Member';
+
+      const { error: txnError } = await supabase.from('transactions').insert([{
+        type: 'income',
+        category: paymentLevy.title || 'Levy',
+        description: paymentForm.note || `Levy payment - ${paymentLevy.title} (${memberName})`,
+        amount: Number(paymentForm.amount),
+        mode_of_payment: 'cash',
+        member_id: paymentForm.memberId,
+        event_id: paymentLevy.event_id || null,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+        date: new Date().toISOString().split('T')[0],
+        status: 'Completed',
+      }]);
+      if (txnError) throw txnError;
+
+      const { error: updateError } = await supabase
+        .from('levies')
+        .update({
+          total_collected: Number(paymentLevy.totalCollected || 0) + Number(paymentForm.amount),
+          members_paid: Number(paymentLevy.membersPaid || 0) + 1,
+        })
+        .eq('id', paymentLevy.id);
+      if (updateError) throw updateError;
+
+      setShowPaymentModal(false);
+      await fetchLevies();
+    } catch (err: any) {
+      setPaymentError(err?.message || 'Failed to record levy payment.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const totalCollected = levies.reduce((total, levy) => total + (levy.totalCollected || 0), 0);
   const totalExpected = levies.reduce((total, levy) => total + (levy.totalExpected || 0), 0);
 
   return (
     <div className="p-8">
-      <Header title="Levies" subtitle="Manage member levies and collections" action="Record Levy Payment" actionLink="/dashboard/transactions?action=record" />
+      <Header title="Levies" subtitle="Manage member levies and collections" action="New Levy" actionOnClick={openCreateModal} />
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard title="Total Collected" amount={totalCollected} icon={FileText} color="bg-green-600" />
         <StatCard title="Total Expected" amount={totalExpected} icon={FileText} color="bg-blue-600" />
@@ -888,9 +1035,18 @@ export function LeviesPage() {
                   </div>
                   <p className="text-sm text-gray-600">{levy.description}</p>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Amount per member</p>
-                  <p className="text-xl font-semibold text-gray-900">{formatCurrency(levy.amountPerMember)}</p>
+                <div className="flex flex-col items-end gap-2">
+                  <div className="text-right">
+                    <p className="text-sm text-gray-600">Amount per member</p>
+                    <p className="text-xl font-semibold text-gray-900">{formatCurrency(levy.amountPerMember)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openPaymentModal(levy)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500 cursor-pointer"
+                  >
+                    <HandCoins className="h-3.5 w-3.5" /> Record Payment
+                  </button>
                 </div>
               </div>
               <div className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-4">
@@ -913,31 +1069,224 @@ export function LeviesPage() {
         })}
       </div>
       )}
+
+      <Modal open={showCreateModal} title="Create New Levy" onClose={() => setShowCreateModal(false)}>
+        <form onSubmit={handleCreateLevy} className="space-y-4">
+          {createError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{createError}</div>}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Levy Title">
+              <input
+                value={createForm.title}
+                onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                required
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder="e.g. Christmas Fund"
+              />
+            </Field>
+            <Field label="Amount per Member (₦)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={createForm.amountPerMember}
+                onChange={(e) => setCreateForm({ ...createForm, amountPerMember: e.target.value })}
+                required
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder="0.00"
+              />
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Number of Members">
+              <input
+                type="number"
+                min="0"
+                value={createForm.totalMembers}
+                onChange={(e) => setCreateForm({ ...createForm, totalMembers: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
+            <Field label="Deadline">
+              <input
+                type="date"
+                value={createForm.deadline}
+                onChange={(e) => setCreateForm({ ...createForm, deadline: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              />
+            </Field>
+          </div>
+          <Field label="Linked Event (Optional)">
+            <select
+              value={createForm.eventId}
+              onChange={(e) => setCreateForm({ ...createForm, eventId: e.target.value })}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">No event (general levy)</option>
+              {assignedEvents.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Description (Optional)">
+            <textarea
+              value={createForm.description}
+              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              rows={2}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            />
+          </Field>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowCreateModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 cursor-pointer">
+              {saving ? 'Creating...' : 'Create Levy'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={showPaymentModal} title="Record Levy Payment" onClose={() => setShowPaymentModal(false)}>
+        <form onSubmit={handleRecordPayment} className="space-y-4">
+          {paymentError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{paymentError}</div>}
+          {paymentLevy && (
+            <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <strong>{paymentLevy.name}</strong> · Amount per member {formatCurrency(paymentLevy.amountPerMember)}
+            </div>
+          )}
+          <Field label="Member">
+            <select
+              value={paymentForm.memberId}
+              onChange={(e) => setPaymentForm({ ...paymentForm, memberId: e.target.value })}
+              required
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">Select member...</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{`${m.first_name} ${m.last_name}`.trim()}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Amount (₦)">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={paymentForm.amount}
+              onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+              required
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="0.00"
+            />
+          </Field>
+          <Field label="Note (Optional)">
+            <input
+              value={paymentForm.note}
+              onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="e.g. Paid by bank transfer for January"
+            />
+          </Field>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowPaymentModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 cursor-pointer">
+              {saving ? 'Recording...' : 'Record Payment'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
 
 export function ContributionsPage() {
   const [contributions, setContributions] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [assignedEvents, setAssignedEvents] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState({ memberId: '', amount: '', type: 'General', eventId: '', note: '' });
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const fetchContributions = async () => {
+    setLoading(true);
+    setError(null);
+    const { data, error: fetchError } = await supabase.from('contributions').select('*').order('created_at', { ascending: false });
+    if (fetchError) {
+      setError(fetchError.message);
+      setLoading(false);
+      return;
+    }
+    setContributions(data ?? []);
+    setLoading(false);
+  };
 
   useEffect(() => {
     (async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const { data, error: fetchError } = await supabase.from('contributions').select('*').order('created_at', { ascending: false });
-        if (fetchError) throw fetchError;
-        setContributions(data ?? []);
-      } catch (err: any) {
-        console.error('Error fetching contributions:', err);
-        setError(err?.message || 'Failed to load contributions.');
-      } finally {
-        setLoading(false);
-      }
+      await Promise.all([
+        fetchContributions(),
+        fetchMyAssignedEvents().then(setAssignedEvents),
+        supabase.from('members').select('id, first_name, last_name').order('created_at', { ascending: false }).then(({ data }) => setMembers(data ?? [])),
+      ]);
     })();
   }, []);
+
+  const openModal = () => {
+    setForm({ memberId: '', amount: '', type: 'General', eventId: '', note: '' });
+    setFormError(null);
+    setShowModal(true);
+  };
+
+  const handleRecord = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+    if (!form.memberId || !Number(form.amount)) {
+      setFormError('Select a member and enter an amount.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const member = members.find((m) => m.id === form.memberId);
+      const memberName = member ? `${member.first_name} ${member.last_name}`.trim() : 'Member';
+      const linkedEvent = assignedEvents.find((ev) => ev.id === form.eventId);
+
+      const { error: contribError } = await supabase.from('contributions').insert([{
+        amount: Number(form.amount),
+        type: form.type,
+        description: form.note || `${form.type} contribution from ${memberName}`,
+        source: memberName,
+        event_id: form.eventId || null,
+        event: linkedEvent?.name || null,
+        financial_year_id: yearData?.id ?? null,
+      }]);
+      if (contribError) throw contribError;
+
+      const { error: txnError } = await supabase.from('transactions').insert([{
+        type: 'income',
+        category: 'Contribution',
+        description: `${form.type} contribution from ${memberName}${linkedEvent ? ` - ${linkedEvent.name}` : ''}`,
+        amount: Number(form.amount),
+        mode_of_payment: 'cash',
+        member_id: form.memberId,
+        event_id: form.eventId || null,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+        date: new Date().toISOString().split('T')[0],
+        status: 'Completed',
+      }]);
+      if (txnError) throw txnError;
+
+      setShowModal(false);
+      await fetchContributions();
+    } catch (err: any) {
+      setFormError(err?.message || 'Failed to record contribution.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const total = contributions.reduce((sum, c) => sum + (c.amount || 0), 0);
   const eventTotal = contributions
@@ -946,7 +1295,7 @@ export function ContributionsPage() {
 
   return (
     <div className="p-8">
-      <Header title="Contributions" subtitle="Voluntary contributions from members" action="Record Contribution" actionLink="/dashboard/transactions?action=record" />
+      <Header title="Contributions" subtitle="Voluntary contributions from members" action="Record Contribution" actionOnClick={openModal} />
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <StatCard title="Total Contributions" amount={total} icon={HandCoins} color="bg-blue-600" />
         <StatCard title="Event Contributions" amount={eventTotal} icon={HandCoins} color="bg-purple-600" />
@@ -991,6 +1340,75 @@ export function ContributionsPage() {
         </div>
       </div>
       )}
+      <Modal open={showModal} title="Record Contribution" onClose={() => setShowModal(false)}>
+        <form onSubmit={handleRecord} className="space-y-4">
+          {formError && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</div>}
+          <Field label="Member">
+            <select
+              value={form.memberId}
+              onChange={(e) => setForm({ ...form, memberId: e.target.value })}
+              required
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">Select member...</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>{`${m.first_name} ${m.last_name}`.trim()}</option>
+              ))}
+            </select>
+          </Field>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <Field label="Amount (₦)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.amount}
+                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                required
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder="0.00"
+              />
+            </Field>
+            <Field label="Type">
+              <select
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="General">General</option>
+                <option value="Event">Event</option>
+                <option value="Special">Special</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Linked Event (Optional)">
+            <select
+              value={form.eventId}
+              onChange={(e) => setForm({ ...form, eventId: e.target.value })}
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+            >
+              <option value="">No event</option>
+              {assignedEvents.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Note (Optional)">
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              placeholder="e.g. Thanksgiving donation"
+            />
+          </Field>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={() => setShowModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 cursor-pointer">
+              {saving ? 'Recording...' : 'Record Contribution'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
@@ -1805,7 +2223,20 @@ export function EventsPage() {
     }
   };
 
-  useEffect(() => { fetchEvents(); }, []);
+  useEffect(() => {
+    void fetchEvents();
+
+    const channel = supabase
+      .channel('events-page-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => void fetchEvents())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_assignments' }, () => void fetchEvents())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void fetchEvents())
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleCreateEvent = async () => {
     setFormErrors(null);
@@ -2272,6 +2703,7 @@ export function EventsPage() {
 
 export function EventDetailsPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [event, setEvent] = useState<any>(null);
   const [eventTransactions, setEventTransactions] = useState<any[]>([]);
@@ -2282,6 +2714,24 @@ export function EventDetailsPage() {
   const [assignEmail, setAssignEmail] = useState('');
   const [assignRole, setAssignRole] = useState<'fin_sec' | 'committee_lead'>('committee_lead');
   const [assigning, setAssigning] = useState(false);
+
+  const fetchAssignedStaff = async () => {
+    const { data: assignData } = await supabase
+      .from('event_assignments')
+      .select('id, role, user_id')
+      .eq('event_id', id);
+    const rows = (assignData ?? []) as any[];
+    const staffIds = rows.map((r) => r.user_id);
+    const profileMap: Record<string, any> = {};
+    if (staffIds.length) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role')
+        .in('id', staffIds);
+      for (const p of profileData ?? []) profileMap[p.id] = p;
+    }
+    return rows.map((r) => ({ ...r, profiles: profileMap[r.user_id] ?? null }));
+  };
 
   useEffect(() => {
     const fetchEventData = async () => {
@@ -2295,16 +2745,13 @@ export function EventDetailsPage() {
         if (eventError) throw eventError;
         setEvent(eventData);
 
-        const [{ data: transData, error: transError }, { data: assignData }] = await Promise.all([
+        const [{ data: transData, error: transError }, assignData] = await Promise.all([
           supabase
             .from('transactions')
             .select('*')
             .eq('event_id', id)
             .order('created_at', { ascending: false }),
-          supabase
-            .from('event_assignments')
-            .select('id, role, user_id, profiles(full_name, email, role)')
-            .eq('event_id', id),
+          fetchAssignedStaff(),
         ]);
         if (transError) throw transError;
         setEventTransactions(transData ?? []);
@@ -2316,7 +2763,19 @@ export function EventDetailsPage() {
         setLoading(false);
       }
     };
-    if (id) fetchEventData();
+    if (!id) return;
+    void fetchEventData();
+
+    const channel = supabase
+      .channel(`event-details-live-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events', filter: `id=eq.${id}` }, () => void fetchEventData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'event_assignments', filter: `event_id=eq.${id}` }, () => void fetchEventData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `event_id=eq.${id}` }, () => void fetchEventData())
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const handleAssignStaff = async () => {
@@ -2371,12 +2830,7 @@ export function EventDetailsPage() {
       showToast('User successfully added to event.', 'success');
       setShowAssignModal(false);
       setAssignEmail('');
-
-      const { data: assignData } = await supabase
-        .from('event_assignments')
-        .select('id, role, user_id, profiles(full_name, email, role)')
-        .eq('event_id', id);
-      setAssignedStaff(assignData ?? []);
+      setAssignedStaff((await fetchAssignedStaff()) ?? []);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to assign staff.', 'error');
     } finally {
@@ -2429,6 +2883,10 @@ export function EventDetailsPage() {
     .reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
   const net = totalIncome - totalExpenses;
 
+  const isOwner = event.created_by === user?.id;
+  const myAssignment = assignedStaff.find((s: any) => s.user_id === user?.id);
+  const myRoleLabel = myAssignment?.role === 'fin_sec' ? 'Financial Secretary' : 'Committee Lead';
+
   return (
     <div className="p-8">
       <div className="mb-8">
@@ -2453,6 +2911,28 @@ export function EventDetailsPage() {
         <StatCard title="Committee Balance" amount={Number(event.committee_balance || 0)} icon={Banknote} color="bg-blue-600" />
       </div>
 
+      {myAssignment && (
+        <div className="mb-6 flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600">
+              <Users className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <p className="font-semibold text-emerald-900">You are assigned as {myRoleLabel} for this event</p>
+              <p className="text-sm text-emerald-700">
+                Record income, expenses and manage this event's financials from your workspace below.
+              </p>
+            </div>
+          </div>
+          <Link
+            to={myAssignment.role === 'fin_sec' ? '/dashboard/financial-secretary' : '/dashboard/committee-lead'}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+          >
+            Open My Workspace
+          </Link>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-lg border border-gray-200 bg-white p-6">
           <h2 className="mb-4 font-semibold text-gray-900">Event Summary</h2>
@@ -2468,13 +2948,15 @@ export function EventDetailsPage() {
         <div className="rounded-lg border border-gray-200 bg-white p-6">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Assigned Staff</h2>
-            <button
-              type="button"
-              onClick={() => setShowAssignModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 cursor-pointer"
-            >
-              <UserPlus className="h-3.5 w-3.5" /> Assign Staff
-            </button>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 cursor-pointer"
+              >
+                <UserPlus className="h-3.5 w-3.5" /> Assign Staff
+              </button>
+            )}
           </div>
           {assignedStaff.length === 0 ? (
             <p className="text-sm text-gray-600">No staff assigned to this event yet.</p>

@@ -152,16 +152,28 @@ export default function AdminDashboard() {
         const [{ data: txnData }, { data: assignmentData }, { data: ledgerData }, { data: pledgeData }] = await Promise.all([
           supabase.from('transactions').select('id, amount, type, mode_of_payment, event_id, recorded_by'),
           eventIds.length
-            ? supabase.from('event_assignments').select('*, profiles(full_name, email)').in('event_id', eventIds)
+            ? supabase.from('event_assignments').select('*').in('event_id', eventIds)
             : Promise.resolve({ data: [] }),
           supabase.from('member_ledgers').select('id, amount_due, amount_paid, total_owed, total_paid, penalty_accumulated, is_cleared, event_id'),
           supabase.from('pledges').select('id, amount, status'),
         ]);
 
+        const rawAssignments = (assignmentData ?? []) as StaffAssignment[];
+        const staffIds = rawAssignments.map((a) => a.user_id);
+        const profileMap: Record<string, { id: string; full_name: string | null; email: string | null }> = {};
+        if (staffIds.length) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', staffIds);
+          for (const p of profileData ?? []) profileMap[p.id] = p;
+        }
+        const withProfiles = rawAssignments.map((a) => ({ ...a, profiles: profileMap[a.user_id] ?? null }));
+
         if (!mounted) return;
         setEvents(myEvents);
         setTransactions((txnData ?? []) as TransactionRow[]);
-        setAssignments((assignmentData ?? []) as unknown as StaffAssignment[]);
+        setAssignments(withProfiles);
         setLedgers((ledgerData ?? []) as LedgerRow[]);
         setPledges((pledgeData ?? []) as PledgeRow[]);
       } catch (err) {

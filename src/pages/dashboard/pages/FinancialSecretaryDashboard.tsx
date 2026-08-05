@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   ArrowDownRight,
   ArrowUpRight,
   Banknote,
@@ -15,6 +16,7 @@ import {
   Scale,
   ShieldCheck,
   Users,
+  X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -133,6 +135,11 @@ export default function FinancialSecretaryDashboard() {
   const [reconNotes, setReconNotes] = useState('');
   const [reconSaving, setReconSaving] = useState(false);
   const [closing, setClosing] = useState(false);
+
+  const [penaltyTarget, setPenaltyTarget] = useState<{ memberId: string; fullName: string } | null>(null);
+  const [penaltyAmount, setPenaltyAmount] = useState('');
+  const [penaltyDesc, setPenaltyDesc] = useState('');
+  const [penaltySaving, setPenaltySaving] = useState(false);
 
   const load = async () => {
     try {
@@ -290,6 +297,54 @@ export default function FinancialSecretaryDashboard() {
     return Number(value ?? 0).toLocaleString('en-NG');
   }
 
+  const handleAddPenalty = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!penaltyTarget || !Number(penaltyAmount)) {
+      showToast('Enter a valid penalty amount.', 'error');
+      return;
+    }
+    setPenaltySaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
+      const { error: txnError } = await supabase.from('transactions').insert([{
+        type: 'expense',
+        category: 'Penalty',
+        description: penaltyDesc.trim() || `Penalty applied to ${penaltyTarget.fullName}`,
+        amount: Number(penaltyAmount),
+        mode_of_payment: 'cash',
+        member_id: penaltyTarget.memberId,
+        financial_year_id: yearData?.id ?? null,
+        recorded_by: user?.id ?? null,
+        date: new Date().toISOString().split('T')[0],
+        status: 'Completed',
+      }]);
+      if (txnError) throw txnError;
+
+      const { data: memberData } = await supabase
+        .from('members')
+        .select('penalties')
+        .eq('id', penaltyTarget.memberId)
+        .maybeSingle();
+
+      const { error: updateError } = await supabase
+        .from('members')
+        .update({ penalties: (Number(memberData?.penalties || 0)) + Number(penaltyAmount) })
+        .eq('id', penaltyTarget.memberId);
+      if (updateError) throw updateError;
+
+      showToast(`Penalty of ${formatCurrency(Number(penaltyAmount))} applied to ${penaltyTarget.fullName}.`, 'success');
+      setPenaltyTarget(null);
+      setPenaltyAmount('');
+      setPenaltyDesc('');
+      void load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to apply penalty.', 'error');
+    } finally {
+      setPenaltySaving(false);
+    }
+  };
+
   return (
     <div className="p-8">
       <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -371,7 +426,20 @@ export default function FinancialSecretaryDashboard() {
                       <p className="text-xs text-gray-500">{row.rate}% paid · {formatCurrency(row.paid)} of {formatCurrency(row.owed)}</p>
                     </div>
                   </div>
-                  <p className="font-semibold text-red-600">{formatCurrency(row.outstanding)}</p>
+                  <div className="flex flex-col items-end gap-1">
+                    <p className="font-semibold text-red-600">{formatCurrency(row.outstanding)}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPenaltyTarget({ memberId: row.memberId, fullName: row.fullName });
+                        setPenaltyAmount('');
+                        setPenaltyDesc('');
+                      }}
+                      className="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-100 cursor-pointer"
+                    >
+                      <AlertTriangle className="h-3 w-3" /> Add Penalty
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -570,6 +638,71 @@ export default function FinancialSecretaryDashboard() {
         All figures are scoped strictly to the events assigned to you. Reconciliation snapshots are stored in the reconciliations
         table, and closing a financial year permanently locks it while opening a fresh one with carried-forward balances.
       </div>
+
+      {penaltyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setPenaltyTarget(null)}>
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Apply Penalty</h3>
+                <p className="mt-0.5 text-sm text-gray-500">{penaltyTarget.fullName}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPenaltyTarget(null)}
+                className="rounded-lg p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 cursor-pointer"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddPenalty} className="space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Amount (₦)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={penaltyAmount}
+                  onChange={(e) => setPenaltyAmount(e.target.value)}
+                  required
+                  autoFocus
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  placeholder="0.00"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">Reason (Optional)</label>
+                <input
+                  value={penaltyDesc}
+                  onChange={(e) => setPenaltyDesc(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-100"
+                  placeholder="e.g. Late levy payment"
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPenaltyTarget(null)}
+                  className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={penaltySaving}
+                  className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50 cursor-pointer"
+                >
+                  {penaltySaving ? 'Applying...' : 'Apply Penalty'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

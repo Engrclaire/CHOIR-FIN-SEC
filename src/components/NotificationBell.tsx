@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, X } from 'lucide-react';
 import { supabase } from '../config/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,7 @@ type NotificationRow = {
   type: 'assignment' | 'system' | 'payment';
   is_read: boolean;
   created_at: string;
+  event_id?: string | null;
 };
 
 function formatTime(value: string) {
@@ -23,6 +25,7 @@ function formatTime(value: string) {
 
 export default function NotificationBell() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -36,7 +39,7 @@ export default function NotificationBell() {
     const load = async () => {
       const { data, error } = await supabase
         .from('notifications')
-        .select('id, title, message, type, is_read, created_at')
+        .select('id, title, message, type, is_read, created_at, event_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -67,6 +70,17 @@ export default function NotificationBell() {
     if (unreadIds.length === 0) return;
     await supabase.from('notifications').update({ is_read: true }).in('id', unreadIds);
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+  };
+
+  const handleNotificationClick = (notification: NotificationRow) => {
+    setOpen(false);
+    if (!notification.is_read) {
+      void supabase.from('notifications').update({ is_read: true }).eq('id', notification.id);
+      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n)));
+    }
+    if (notification.event_id) {
+      navigate(`/dashboard/events/${notification.event_id}`);
+    }
   };
 
   const typeStyles: Record<NotificationRow['type'], string> = {
@@ -125,7 +139,13 @@ export default function NotificationBell() {
                 notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`flex items-start gap-3 border-b border-gray-100 px-5 py-4 transition ${notification.is_read ? 'bg-white' : 'bg-blue-50/50'}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleNotificationClick(notification)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') handleNotificationClick(notification);
+                    }}
+                    className={`flex cursor-pointer items-start gap-3 border-b border-gray-100 px-5 py-4 text-left transition hover:bg-gray-50 ${notification.is_read ? 'bg-white' : 'bg-blue-50/50'}`}
                   >
                     <span className={`mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${typeStyles[notification.type]}`}>
                       <Bell className="h-4 w-4" />
