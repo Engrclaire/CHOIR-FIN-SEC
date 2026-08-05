@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../../../config/supabaseClient';
+import { useToast } from '../../../contexts/useToast';
 import {
   AlertCircle,
   AlertTriangle,
@@ -13,9 +14,11 @@ import {
   CircleDollarSign,
   FileText,
   HandCoins,
+  Mail,
   Plus,
   Search,
   TrendingUp,
+  UserPlus,
   Users,
   Wallet,
   X,
@@ -59,6 +62,8 @@ interface Member {
   totalPaid: number;
   totalLevies: number;
   contributions: number;
+  totalExpected?: number;
+  paymentRate?: number;
 }
 
 /* =========================================
@@ -1036,20 +1041,28 @@ export function MembersPage() {
       });
 
       setMembers(
-        (memberData || []).map((m: any) => ({
-          id: m.id,
-          firstName: m.first_name,
-          lastName: m.last_name,
-          phone: m.phone || '',
-          email: m.email || '',
-          role: m.role || '',
-          debtStatus: m.debt_status || 'clear',
-          outstandingDebt: m.outstanding_debt || 0,
-          penalties: m.penalties || 0,
-          totalPaid: txnByMember[m.id] ?? (m.total_levies || 0) + (m.total_contributions || 0),
-          totalLevies: m.total_levies || 0,
-          contributions: m.total_contributions || 0,
-        }))
+        (memberData || []).map((m: any) => {
+          const totalPaid = txnByMember[m.id] ?? (m.total_levies || 0) + (m.total_contributions || 0);
+          const outstanding = m.outstanding_debt || 0;
+          const penalties = m.penalties || 0;
+          const totalExpected = totalPaid + outstanding + penalties;
+          return {
+            id: m.id,
+            firstName: m.first_name,
+            lastName: m.last_name,
+            phone: m.phone || '',
+            email: m.email || '',
+            role: m.role || '',
+            debtStatus: m.debt_status || 'clear',
+            outstandingDebt: outstanding,
+            penalties,
+            totalPaid,
+            totalLevies: m.total_levies || 0,
+            contributions: m.total_contributions || 0,
+            totalExpected,
+            paymentRate: totalExpected > 0 ? Math.round((totalPaid / totalExpected) * 100) : 0,
+          };
+        })
       );
     } catch (err) {
       console.error('Error fetching members:', err);
@@ -1058,7 +1071,17 @@ export function MembersPage() {
     }
   };
 
-  useEffect(() => { fetchMembers(); }, []);
+  useEffect(() => {
+    void fetchMembers();
+    const channel = supabase
+      .channel('members-page-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, () => void fetchMembers())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => void fetchMembers())
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1205,6 +1228,18 @@ export function MembersPage() {
                   <p className={`font-semibold ${m.outstandingDebt + m.penalties > 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(m.outstandingDebt + m.penalties)}</p>
                 </div>
               </div>
+              <div className="mb-4">
+                <div className="mb-1 flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Payment Rate</span>
+                  <span className="font-medium text-gray-900">{m.paymentRate ?? 0}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className={`h-full rounded-full ${(m.paymentRate ?? 0) >= 70 ? 'bg-emerald-500' : (m.paymentRate ?? 0) >= 40 ? 'bg-amber-500' : 'bg-red-500'}`}
+                    style={{ width: `${m.paymentRate ?? 0}%` }}
+                  />
+                </div>
+              </div>
               <div className="space-y-2 border-t pt-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Levies Paid:</span>
@@ -1340,7 +1375,15 @@ export function MemberDetailsPage() {
         setLoading(false);
       }
     };
-    load();
+    void load();
+    const channel = supabase
+      .channel(`member-details-live-${id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `member_id=eq.${id}` }, () => void load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'members', filter: `id=eq.${id}` }, () => void load())
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [id]);
 
   const handleRecordPayment = async (e: React.FormEvent) => {
@@ -1495,7 +1538,7 @@ export function MemberDetailsPage() {
   if (loading) return <div className="p-8"><div className="py-12 text-center text-sm text-gray-500 animate-pulse">Loading member profile...</div></div>;
   if (!member) return <div className="p-8"><div className="py-12 text-center text-sm text-gray-500">Member not found.</div></div>;
 
-  const totalPaid = member.totalLevies + member.contributions;
+  const totalPaid = member.totalPaid;
   const totalDebt = member.outstandingDebt + member.penalties;
 
   return (
@@ -2229,10 +2272,16 @@ export function EventsPage() {
 
 export function EventDetailsPage() {
   const { id } = useParams();
+  const { showToast } = useToast();
   const [event, setEvent] = useState<any>(null);
   const [eventTransactions, setEventTransactions] = useState<any[]>([]);
+  const [assignedStaff, setAssignedStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignEmail, setAssignEmail] = useState('');
+  const [assignRole, setAssignRole] = useState<'fin_sec' | 'committee_lead'>('committee_lead');
+  const [assigning, setAssigning] = useState(false);
 
   useEffect(() => {
     const fetchEventData = async () => {
@@ -2246,13 +2295,20 @@ export function EventDetailsPage() {
         if (eventError) throw eventError;
         setEvent(eventData);
 
-        const { data: transData, error: transError } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('event_id', id)
-          .order('created_at', { ascending: false });
+        const [{ data: transData, error: transError }, { data: assignData }] = await Promise.all([
+          supabase
+            .from('transactions')
+            .select('*')
+            .eq('event_id', id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('event_assignments')
+            .select('id, role, user_id, profiles(full_name, email, role)')
+            .eq('event_id', id),
+        ]);
         if (transError) throw transError;
         setEventTransactions(transData ?? []);
+        setAssignedStaff(assignData ?? []);
       } catch (err) {
         console.error('Error fetching event details:', err);
         setError(err instanceof Error ? err.message : 'Failed to load event details.');
@@ -2262,6 +2318,83 @@ export function EventDetailsPage() {
     };
     if (id) fetchEventData();
   }, [id]);
+
+  const handleAssignStaff = async () => {
+    if (!assignEmail.trim()) {
+      showToast('Please enter the staff email.', 'error');
+      return;
+    }
+    setAssigning(true);
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, role')
+        .eq('email', assignEmail.trim())
+        .maybeSingle();
+
+      if (!profile) {
+        showToast('User not found or does not have the required role.', 'error');
+        return;
+      }
+      if (profile.role !== assignRole) {
+        const roleLabel = assignRole === 'fin_sec' ? 'Financial Secretary' : 'Committee Lead';
+        showToast(`User not found or does not have the required ${roleLabel} role.`, 'error');
+        return;
+      }
+
+      const alreadyAssigned = assignedStaff.some((s: any) => s.user_id === profile.id && s.role === assignRole);
+      if (alreadyAssigned) {
+        showToast('This user is already assigned to this event in that role.', 'error');
+        return;
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const [{ error: assignError }, { error: notifyError }] = await Promise.all([
+        supabase.from('event_assignments').insert([{
+          event_id: id,
+          user_id: profile.id,
+          role: assignRole,
+          assigned_by: user?.id,
+        }]),
+        supabase.from('notifications').insert([{
+          user_id: profile.id,
+          event_id: id,
+          type: 'assignment',
+          title: 'New Event Assignment',
+          message: `You have been assigned as ${assignRole === 'fin_sec' ? 'Financial Secretary' : 'Committee Lead'} for ${event?.name ?? 'an event'}.`,
+        }]),
+      ]);
+
+      if (assignError) throw assignError;
+      if (notifyError) throw notifyError;
+
+      showToast('User successfully added to event.', 'success');
+      setShowAssignModal(false);
+      setAssignEmail('');
+
+      const { data: assignData } = await supabase
+        .from('event_assignments')
+        .select('id, role, user_id, profiles(full_name, email, role)')
+        .eq('event_id', id);
+      setAssignedStaff(assignData ?? []);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to assign staff.', 'error');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const handleRemoveStaff = async (assignmentId: string) => {
+    if (!confirm('Remove this staff member from the event?')) return;
+    try {
+      const { error } = await supabase.from('event_assignments').delete().eq('id', assignmentId);
+      if (error) throw error;
+      setAssignedStaff((prev) => prev.filter((s: any) => s.id !== assignmentId));
+      showToast('Staff member removed from event.', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to remove staff member.', 'error');
+    }
+  };
 
   if (loading) {
     return (
@@ -2333,6 +2466,48 @@ export function EventDetailsPage() {
           </div>
         </div>
         <div className="rounded-lg border border-gray-200 bg-white p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">Assigned Staff</h2>
+            <button
+              type="button"
+              onClick={() => setShowAssignModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-500 cursor-pointer"
+            >
+              <UserPlus className="h-3.5 w-3.5" /> Assign Staff
+            </button>
+          </div>
+          {assignedStaff.length === 0 ? (
+            <p className="text-sm text-gray-600">No staff assigned to this event yet.</p>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {assignedStaff.map((staff: any) => (
+                <div key={staff.id} className="flex items-center justify-between py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100">
+                      <span className="text-xs font-semibold text-blue-700">
+                        {String(staff.profiles?.full_name || staff.profiles?.email || '?').slice(0, 1).toUpperCase()}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900">{staff.profiles?.full_name || 'Unknown'}</p>
+                      <p className="text-xs text-gray-500">
+                        {staff.profiles?.email} · {staff.role === 'fin_sec' ? 'Financial Secretary' : 'Committee Lead'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRemoveStaff(staff.id)}
+                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="rounded-lg border border-gray-200 bg-white p-6">
           <h2 className="mb-4 font-semibold text-gray-900">Related Transactions</h2>
           {eventTransactions.length === 0 ? (
             <p className="text-sm text-gray-600">No transactions recorded for this event yet.</p>
@@ -2358,6 +2533,81 @@ export function EventDetailsPage() {
           )}
         </div>
       </div>
+
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Assign Staff to Event</h3>
+                <p className="mt-0.5 text-sm text-gray-500">
+                  {event.name} · Financial Secretary or Committee Lead
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Staff Role</label>
+                <div className="mt-2 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAssignRole('committee_lead')}
+                    className={`rounded-xl border px-4 py-3 text-sm font-semibold transition cursor-pointer ${
+                      assignRole === 'committee_lead'
+                        ? 'border-amber-400 bg-amber-50 text-amber-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Committee Lead
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignRole('fin_sec')}
+                    className={`rounded-xl border px-4 py-3 text-sm font-semibold transition cursor-pointer ${
+                      assignRole === 'fin_sec'
+                        ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Financial Secretary
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Staff Email</label>
+                <div className="relative mt-2">
+                  <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="email"
+                    value={assignEmail}
+                    onChange={(e) => setAssignEmail(e.target.value)}
+                    placeholder="staff@example.com"
+                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  The user must have the selected role in their profile, otherwise the assignment is rejected.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={assigning}
+                onClick={() => void handleAssignStaff()}
+                className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:opacity-50 cursor-pointer"
+              >
+                {assigning ? 'Assigning...' : 'Assign Staff'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

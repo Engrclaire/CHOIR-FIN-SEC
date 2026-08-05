@@ -656,8 +656,21 @@ const PremiumOnboarding = () => {
       }
 
       localStorage.setItem('completedOnboarding', 'true');
-      showToast('Setup completed. Welcome to your dashboard.', 'success');
-      navigate('/dashboard', { replace: true });
+
+      const roleTarget: Record<Role, string> = {
+        admin: '/dashboard/admin',
+        fin_sec: '/dashboard/financial-secretary',
+        committee_lead: '/dashboard/committee-lead',
+      };
+
+      if (data.session) {
+        showToast('Setup completed. Welcome to your dashboard.', 'success');
+        await refreshProfile(userId);
+        navigate(roleTarget[accountDetails.role], { replace: true });
+      } else {
+        showToast('Setup completed. Check your email to confirm your account, then log in.', 'success');
+        setView('login');
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to finish onboarding.';
       setErrorMessage(message);

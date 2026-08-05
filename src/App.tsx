@@ -3,10 +3,13 @@ import Login from './auth/Login';
 import Onboarding from './auth/onboarding/PremiumOnboarding';
 import Landing from './pages/Landing';
 import { ToastProvider } from './contexts/ToastContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import DashboardLayout from './pages/dashboard/dashboard';
 import DashboardHome from './pages/dashboard/pages/DashboardHome';
+import AdminDashboard from './pages/dashboard/pages/AdminDashboard';
+import FinancialSecretaryDashboard from './pages/dashboard/pages/FinancialSecretaryDashboard';
+import CommitteeLeadDashboard from './pages/dashboard/pages/CommitteeLeadDashboard';
 import {
   ContributionsPage,
   EventDetailsPage,
@@ -28,6 +31,16 @@ function RootRoute() {
   return completed ? <Login /> : <Navigate to="/onboarding" replace />;
 }
 
+function DashboardIndex() {
+  const { profile, loading } = useAuth();
+  if (loading) return <div className="p-8 text-sm text-gray-500">Loading workspace...</div>;
+  const role = profile?.role;
+  if (role === 'admin') return <Navigate to="/dashboard/admin" replace />;
+  if (role === 'fin_sec') return <Navigate to="/dashboard/financial-secretary" replace />;
+  if (role === 'committee_lead') return <Navigate to="/dashboard/committee-lead" replace />;
+  return <DashboardHome />;
+}
+
 function App() {
   return (
     <Router>
@@ -43,7 +56,10 @@ function App() {
         <Route path="/home" element={<RootRoute />} />
 
         <Route path="/dashboard" element={<DashboardLayout />}>
-          <Route index element={<DashboardHome />} />
+          <Route index element={<DashboardIndex />} />
+          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="financial-secretary" element={<FinancialSecretaryDashboard />} />
+          <Route path="committee-lead" element={<CommitteeLeadDashboard />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="income" element={<IncomePage />} />
           <Route path="expenses" element={<ExpensesPage />} />

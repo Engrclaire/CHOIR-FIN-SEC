@@ -9,6 +9,7 @@ import {
   LogOut,
   Receipt,
   Settings,
+  ShieldCheck,
   UserCog,
   Users,
   X,
@@ -18,6 +19,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import type { MouseEvent } from 'react';
 import { supabase } from '../../../config/supabaseClient';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -131,8 +133,23 @@ const reportItems: SubmenuItem[] = [
 
 export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [submenu, setSubmenu] = useState<'Transactions' | 'Reports' | null>(null);
   const submenuItems = submenu === 'Transactions' ? transactionItems : reportItems;
+
+  const role = profile?.role;
+  const workspaceItem: NavItem | null =
+    role === 'admin'
+      ? { name: 'Admin Workspace', href: '/dashboard/admin', icon: ShieldCheck }
+      : role === 'fin_sec'
+        ? { name: 'FinSec Workspace', href: '/dashboard/financial-secretary', icon: ShieldCheck }
+        : role === 'committee_lead'
+          ? { name: 'Committee Workspace', href: '/dashboard/committee-lead', icon: ShieldCheck }
+          : null;
+
+  const menuSectionsWithWorkspace: MenuSection[] = workspaceItem
+    ? [{ label: 'Overview', items: [{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }, workspaceItem] }, ...menuSections.slice(1)]
+    : menuSections;
 
   const [overview, setOverview] = useState({ income: 0, expenses: 0 });
   useEffect(() => {
@@ -190,7 +207,7 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         </div>
 
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">
-          {menuSections.map((section) => (
+          {menuSectionsWithWorkspace.map((section) => (
             <div key={section.label}>
               <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-gray-400">{section.label}</p>
               <div className="space-y-0.5">

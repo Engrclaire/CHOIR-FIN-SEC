@@ -15,6 +15,7 @@ import {
   LoaderCircle,
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
+import NotificationBell from '../../components/NotificationBell';
 
 type Transaction = {
   id: number;
@@ -178,15 +179,18 @@ export default function DashboardLayout() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="flex-1 overflow-y-auto">
-        <div className="border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
           <button
             type="button"
-            className="inline-flex items-center justify-center rounded-md border border-gray-200 p-2 text-gray-700 cursor-pointer"
+            className="inline-flex items-center justify-center rounded-md border border-gray-200 p-2 text-gray-700 cursor-pointer lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
             <Menu className="h-5 w-5" />
           </button>
-        </div>
+          <div className="ml-auto">
+            <NotificationBell />
+          </div>
+        </header>
         <Outlet />
       </main>
     </div>
