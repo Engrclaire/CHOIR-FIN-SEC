@@ -95,6 +95,22 @@ async function fetchMyAssignedEvents(): Promise<{ id: string; name: string }[]> 
   }
 }
 
+async function logAudit(action: string, entity: string, entityId: string | null | undefined, description?: string) {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('audit_logs').insert([{
+      user_id: user.id,
+      action,
+      entity,
+      entity_id: entityId ?? null,
+      description: description ?? '',
+    }]);
+  } catch {
+    // Audit logging must never break the main financial flow.
+  }
+}
+
 function PrimaryButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
@@ -862,6 +878,7 @@ export function LeviesPage() {
     totalMembers: '',
     deadline: '',
     eventId: '',
+    levyType: 'one_time',
   });
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -888,6 +905,7 @@ export function LeviesPage() {
       membersPaid: Number(l.members_paid || 0),
       totalMembers: Number(l.total_members || 0),
       deadline: l.deadline || '',
+      levyType: l.levy_type || 'one_time',
     })));
     setLoading(false);
   };
@@ -910,6 +928,7 @@ export function LeviesPage() {
       totalMembers: String(members.length || 0),
       deadline: '',
       eventId: '',
+      levyType: 'one_time',
     });
     setCreateError(null);
     setShowCreateModal(true);
@@ -927,7 +946,7 @@ export function LeviesPage() {
       const amount = Number(createForm.amountPerMember);
       const totalMembers = Number(createForm.totalMembers || 0);
       const { data: yearData } = await supabase.from('financial_years').select('id').eq('is_closed', false).maybeSingle();
-      const { error } = await supabase.from('levies').insert([{
+      const { data: inserted, error } = await supabase.from('levies').insert([{
         title: createForm.title.trim(),
         description: createForm.description.trim(),
         amount_per_member: amount,
@@ -938,8 +957,11 @@ export function LeviesPage() {
         deadline: createForm.deadline || null,
         event_id: createForm.eventId || null,
         financial_year_id: yearData?.id ?? null,
-      }]);
+        levy_type: createForm.levyType,
+        is_recurring: createForm.levyType !== 'one_time',
+      }]).select('id').single();
       if (error) throw error;
+      void logAudit('CREATE', 'levy', inserted?.id, `Created ${createForm.levyType} levy "${createForm.title.trim()}" (${formatCurrency(amount)}/member)`);
       setShowCreateModal(false);
       await fetchLevies();
     } catch (err: any) {
@@ -994,6 +1016,7 @@ export function LeviesPage() {
         .eq('id', paymentLevy.id);
       if (updateError) throw updateError;
 
+      void logAudit('PAYMENT', 'levy', paymentLevy.id, `Recorded ${formatCurrency(Number(paymentForm.amount))} levy payment for ${memberName} (${paymentLevy.title})`);
       setShowPaymentModal(false);
       await fetchLevies();
     } catch (err: any) {
@@ -1032,6 +1055,9 @@ export function LeviesPage() {
                   <div className="mb-2 flex items-center gap-3">
                     <h3 className="text-lg font-semibold text-gray-900">{levy.name}</h3>
                     <StatusBadge status={levy.status} />
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                      {levy.levyType === 'monthly' ? 'Monthly' : levy.levyType === 'yearly' ? 'Yearly' : 'One-Time'}
+                    </span>
                   </div>
                   <p className="text-sm text-gray-600">{levy.description}</p>
                 </div>
@@ -1083,6 +1109,19 @@ export function LeviesPage() {
                 placeholder="e.g. Christmas Fund"
               />
             </Field>
+            <Field label="Levy Type">
+              <select
+                value={createForm.levyType}
+                onChange={(e) => setCreateForm({ ...createForm, levyType: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+              >
+                <option value="one_time">One-Time</option>
+                <option value="monthly">Monthly (Recurring)</option>
+                <option value="yearly">Yearly (Recurring)</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Amount per Member (₦)">
               <input
                 type="number"
@@ -1095,8 +1134,6 @@ export function LeviesPage() {
                 placeholder="0.00"
               />
             </Field>
-          </div>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Number of Members">
               <input
                 type="number"
@@ -1106,6 +1143,8 @@ export function LeviesPage() {
                 className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
               />
             </Field>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label="Deadline">
               <input
                 type="date"
@@ -1206,7 +1245,7 @@ export function ContributionsPage() {
   const [saving, setSaving] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ memberId: '', amount: '', type: 'General', eventId: '', note: '' });
+  const [form, setForm] = useState({ memberId: '', amount: '', type: 'General', eventId: '', note: '', isCompulsory: false, penaltyAmount: '' });
   const [formError, setFormError] = useState<string | null>(null);
 
   const fetchContributions = async () => {
@@ -1233,7 +1272,7 @@ export function ContributionsPage() {
   }, []);
 
   const openModal = () => {
-    setForm({ memberId: '', amount: '', type: 'General', eventId: '', note: '' });
+    setForm({ memberId: '', amount: '', type: 'General', eventId: '', note: '', isCompulsory: false, penaltyAmount: '' });
     setFormError(null);
     setShowModal(true);
   };
@@ -1253,7 +1292,7 @@ export function ContributionsPage() {
       const memberName = member ? `${member.first_name} ${member.last_name}`.trim() : 'Member';
       const linkedEvent = assignedEvents.find((ev) => ev.id === form.eventId);
 
-      const { error: contribError } = await supabase.from('contributions').insert([{
+      const { data: insertedContrib, error: contribError } = await supabase.from('contributions').insert([{
         amount: Number(form.amount),
         type: form.type,
         description: form.note || `${form.type} contribution from ${memberName}`,
@@ -1261,8 +1300,20 @@ export function ContributionsPage() {
         event_id: form.eventId || null,
         event: linkedEvent?.name || null,
         financial_year_id: yearData?.id ?? null,
-      }]);
+        is_compulsory: form.isCompulsory,
+        penalty_amount: form.isCompulsory ? Number(form.penaltyAmount || 0) : 0,
+        date: new Date().toISOString().split('T')[0],
+      }]).select('id').single();
       if (contribError) throw contribError;
+
+      if (form.isCompulsory && Number(form.penaltyAmount || 0) > 0) {
+        const { error: penaltyError } = await supabase
+          .from('members')
+          .update({ penalties: (member?.penalties || 0) + Number(form.penaltyAmount) })
+          .eq('id', form.memberId);
+        if (penaltyError) throw penaltyError;
+        void logAudit('PENALTY', 'member', form.memberId, `Auto-applied ${formatCurrency(Number(form.penaltyAmount))} penalty to ${memberName} (compulsory contribution)`);
+      }
 
       const { error: txnError } = await supabase.from('transactions').insert([{
         type: 'income',
@@ -1279,6 +1330,7 @@ export function ContributionsPage() {
       }]);
       if (txnError) throw txnError;
 
+      void logAudit('RECORD', 'contribution', insertedContrib?.id, `Recorded ${formatCurrency(Number(form.amount))} ${form.type} contribution from ${memberName}`);
       setShowModal(false);
       await fetchContributions();
     } catch (err: any) {
@@ -1401,6 +1453,28 @@ export function ContributionsPage() {
               placeholder="e.g. Thanksgiving donation"
             />
           </Field>
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <input
+              type="checkbox"
+              checked={form.isCompulsory}
+              onChange={(e) => setForm({ ...form, isCompulsory: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
+            />
+            <span className="text-sm font-medium text-gray-700">Compulsory contribution (auto-applies penalty)</span>
+          </label>
+          {form.isCompulsory && (
+            <Field label="Penalty Amount (₦)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.penaltyAmount}
+                onChange={(e) => setForm({ ...form, penaltyAmount: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                placeholder="0.00"
+              />
+            </Field>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowModal(false)} className="rounded-xl border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 cursor-pointer">Cancel</button>
             <button type="submit" disabled={saving} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50 cursor-pointer">

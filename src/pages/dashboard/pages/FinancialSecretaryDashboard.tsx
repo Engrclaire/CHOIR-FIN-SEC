@@ -333,6 +333,13 @@ export default function FinancialSecretaryDashboard() {
         .eq('id', penaltyTarget.memberId);
       if (updateError) throw updateError;
 
+      void supabase.from('audit_logs').insert([{
+        action: 'PENALTY',
+        entity: 'member',
+        entity_id: penaltyTarget.memberId,
+        description: `Penalty of ${formatCurrency(Number(penaltyAmount))} applied to ${penaltyTarget.fullName} (${penaltyDesc.trim() || 'Penalty'})`,
+      }]);
+
       showToast(`Penalty of ${formatCurrency(Number(penaltyAmount))} applied to ${penaltyTarget.fullName}.`, 'success');
       setPenaltyTarget(null);
       setPenaltyAmount('');

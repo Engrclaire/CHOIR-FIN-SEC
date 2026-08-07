@@ -20,7 +20,6 @@ import {
   Smartphone,
   Receipt,
   FolderOpen,
-  Database,
   BarChart3,
   LayoutDashboard,
   Calendar,
@@ -98,9 +97,9 @@ function ThemeToggle({ theme, toggle }: { theme: string; toggle: () => void }) {
 function AppDashboard() {
   const navItems = [
     { section: 'OVERVIEW', items: [{ icon: LayoutDashboard, label: 'Dashboard', active: false }, { icon: ShieldCheck, label: 'Admin Workspace', active: true }] },
-    { section: 'FINANCIAL', items: [{ icon: Receipt, label: 'Transactions' }, { icon: Wallet, label: 'Levies' }, { icon: Banknote, label: 'Contributions' }] },
-    { section: 'PEOPLE & EVENTS', items: [{ icon: Users, label: 'Members' }, { icon: Calendar, label: 'Events' }] },
-    { section: 'INSIGHTS', items: [{ icon: BarChart3, label: 'Reports' }] },
+    { section: 'FINANCIAL', items: [{ icon: Receipt, label: 'Transactions', active: false }, { icon: Wallet, label: 'Levies', active: false }, { icon: Banknote, label: 'Contributions', active: false }] },
+    { section: 'PEOPLE & EVENTS', items: [{ icon: Users, label: 'Members', active: false }, { icon: Calendar, label: 'Events', active: false }] },
+    { section: 'INSIGHTS', items: [{ icon: BarChart3, label: 'Reports', active: false }] },
   ];
 
   return (

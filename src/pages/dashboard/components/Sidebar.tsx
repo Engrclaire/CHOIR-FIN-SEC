@@ -46,35 +46,64 @@ type MenuSection = {
   items: NavItem[];
 };
 
-const menuSections: MenuSection[] = [
-  {
+const dashboardItem: NavItem = { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard };
+const workspaceByRole: Record<string, NavItem | null> = {
+  admin: { name: 'Admin Workspace', href: '/dashboard/admin', icon: ShieldCheck },
+  fin_sec: { name: 'FinSec Workspace', href: '/dashboard/financial-secretary', icon: ShieldCheck },
+  committee_lead: { name: 'Committee Workspace', href: '/dashboard/committee-lead', icon: ShieldCheck },
+  member: null,
+};
+
+const transactionsItem: NavItem = { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight, hasSubmenu: true };
+const incomeItem: NavItem = { name: 'Income', href: '/dashboard/income', icon: CircleDollarSign };
+const expensesItem: NavItem = { name: 'Expenses', href: '/dashboard/expenses', icon: Receipt };
+const levyManagementItem: NavItem = { name: 'Levy Management', href: '/dashboard/levies', icon: FileText };
+const contributionsItem: NavItem = { name: 'Contributions & Donations', href: '/dashboard/contributions', icon: HandCoins };
+const membersItem: NavItem = { name: 'Members', href: '/dashboard/members', icon: Users };
+const eventsItem: NavItem = { name: 'Events', href: '/dashboard/events', icon: CalendarDays };
+const reportsItem: NavItem = { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, hasSubmenu: true };
+const usersItem: NavItem = { name: 'Users', href: '/dashboard/user-management', icon: UserCog };
+const settingsItem: NavItem = { name: 'Settings', href: '/dashboard/settings', icon: Settings };
+
+function buildMenuSections(role?: string): MenuSection[] {
+  const workspace = workspaceByRole[role ?? ''] ?? null;
+  const overview: MenuSection = {
     label: 'Overview',
-    items: [
-      { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: 'Financial',
-    items: [
-      { name: 'Transactions', href: '/dashboard/transactions', icon: ArrowLeftRight, hasSubmenu: true },
-      { name: 'Levies', href: '/dashboard/levies', icon: FileText },
-      { name: 'Contributions', href: '/dashboard/contributions', icon: HandCoins },
-    ],
-  },
-  {
-    label: 'People & Events',
-    items: [
-      { name: 'Members', href: '/dashboard/members', icon: Users },
-      { name: 'Events', href: '/dashboard/events', icon: CalendarDays },
-    ],
-  },
-  {
-    label: 'Insights',
-    items: [
-      { name: 'Reports', href: '/dashboard/reports', icon: BarChart3, hasSubmenu: true },
-    ],
-  },
-];
+    items: workspace ? [dashboardItem, workspace] : [dashboardItem],
+  };
+
+  if (role === 'admin') {
+    return [
+      overview,
+      { label: 'Financial', items: [transactionsItem, incomeItem, expensesItem, levyManagementItem, contributionsItem] },
+      { label: 'People & Events', items: [membersItem, eventsItem] },
+      { label: 'Insights', items: [reportsItem, usersItem, settingsItem] },
+    ];
+  }
+
+  if (role === 'fin_sec') {
+    return [
+      overview,
+      { label: 'Financial', items: [transactionsItem, incomeItem, expensesItem, levyManagementItem, contributionsItem] },
+      { label: 'People & Events', items: [membersItem, eventsItem] },
+      { label: 'Insights', items: [reportsItem, settingsItem] },
+    ];
+  }
+
+  if (role === 'committee_lead') {
+    return [
+      overview,
+      { label: 'Financial', items: [transactionsItem, incomeItem, expensesItem] },
+      { label: 'Insights', items: [reportsItem] },
+    ];
+  }
+
+  if (role === 'member') {
+    return [overview];
+  }
+
+  return [overview];
+}
 
 const transactionItems: SubmenuItem[] = [
   {
@@ -135,42 +164,14 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [submenu, setSubmenu] = useState<'Transactions' | 'Reports' | null>(null);
-  const submenuItems = submenu === 'Transactions' ? transactionItems : reportItems;
 
   const role = profile?.role;
-  const workspaceItem: NavItem | null =
-    role === 'admin'
-      ? { name: 'Admin Workspace', href: '/dashboard/admin', icon: ShieldCheck }
-      : role === 'fin_sec'
-        ? { name: 'FinSec Workspace', href: '/dashboard/financial-secretary', icon: ShieldCheck }
-        : role === 'committee_lead'
-          ? { name: 'Committee Workspace', href: '/dashboard/committee-lead', icon: ShieldCheck }
-          : null;
 
-  const blockedForCommitteeLead = new Set(['Levies', 'Contributions', 'Members']);
-  const blockedForMember = new Set([
-    'Transactions', 'Levies', 'Contributions', 'Members', 'Events', 'Reports',
-  ]);
-  const isAdmin = role === 'admin';
-  const isFinSec = role === 'fin_sec';
-  const isCommitteeLead = role === 'committee_lead';
+  const menuSectionsWithWorkspace = buildMenuSections(role);
 
-  const visibleSections: MenuSection[] = menuSections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => {
-        if (isAdmin) return true;
-        if (isFinSec) return true;
-        if (isCommitteeLead) return !blockedForCommitteeLead.has(item.name);
-        if (role === 'member') return !blockedForMember.has(item.name);
-        return true;
-      }),
-    }))
-    .filter((section) => section.items.length > 0);
-
-  const menuSectionsWithWorkspace: MenuSection[] = workspaceItem
-    ? [{ label: 'Overview', items: [{ name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }, workspaceItem] }, ...visibleSections]
-    : visibleSections;
+  const canManageFinance = role === 'admin' || role === 'fin_sec' || role === 'committee_lead';
+  const transactionSubmenu = canManageFinance ? transactionItems : transactionItems.filter((item) => !['Levies', 'Contributions', 'Record Transaction'].includes(item.name));
+  const submenuItems = submenu === 'Transactions' ? transactionSubmenu : reportItems;
 
   const [overview, setOverview] = useState({ income: 0, expenses: 0 });
   useEffect(() => {
@@ -259,34 +260,6 @@ export default function Sidebar({ isOpen = false, onClose }: SidebarProps) {
         </nav>
 
         <div className="border-t border-gray-200 p-3">
-          {isAdmin && (
-            <NavLink
-              to="/dashboard/user-management"
-              className={({ isActive }) =>
-                `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              <UserCog className="h-5 w-5" />
-              <span>Users</span>
-            </NavLink>
-          )}
-
-          {isAdmin && (
-            <NavLink
-              to="/dashboard/settings"
-              className={({ isActive }) =>
-                `mb-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-100'
-                }`
-              }
-            >
-              <Settings className="h-5 w-5" />
-              <span>Settings</span>
-            </NavLink>
-          )}
-
           <button
             type="button"
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-100 cursor-pointer"

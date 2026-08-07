@@ -25,23 +25,19 @@ DECLARE
   con_name text;
 BEGIN
   FOR con_name IN
-    SELECT con.conname
-    FROM pg_constraint con
-    JOIN pg_class rel ON rel.oid = con.conrelid
+    SELECT c.conname
+    FROM pg_constraint c
+    JOIN pg_class rel ON rel.oid = c.conrelid
     JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+    JOIN pg_attribute att
+      ON att.attrelid = c.conrelid
+     AND att.attnum = ANY (c.conkey)
     WHERE nsp.nspname = 'public'
       AND rel.relname = 'profiles'
-      AND con.contype = 'c'
+      AND c.contype = 'c'
+      AND att.attname = 'role'
   LOOP
-    IF EXISTS (
-      SELECT 1
-      FROM pg_attribute att
-      WHERE att.attrelid = con.conrelid
-        AND att.attnum = ANY (con.conkey)
-        AND att.attname = 'role'
-    ) THEN
-      EXECUTE format('ALTER TABLE public.profiles DROP CONSTRAINT %I', con_name);
-    END IF;
+    EXECUTE format('ALTER TABLE public.profiles DROP CONSTRAINT %I', con_name);
   END LOOP;
 END $$;
 

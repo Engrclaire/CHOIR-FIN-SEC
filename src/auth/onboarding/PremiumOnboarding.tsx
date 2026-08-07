@@ -593,7 +593,7 @@ const PremiumOnboarding = () => {
 
       if (profileError) throw profileError;
 
-      if (accountDetails.role !== 'member') {
+      if (accountDetails.role === 'admin' || accountDetails.role === 'fin_sec') {
         const currentYearString = new Date().getFullYear().toString();
         const { data: yearData, error: yearLookupError } = await supabase
           .from('financial_years')
